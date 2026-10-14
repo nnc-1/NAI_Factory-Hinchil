@@ -31,6 +31,8 @@ if errorlevel 1 (echo "Start NAI Factory.bat" is missing. & goto fail)
 for %%f in (core.js hinchil.js gui-server.js gui.html scan.js gen-api.js generate.html generate.js package.json icon.ico README.txt LICENSE NOTICE-anime-censor.txt NOTICE-third-party.txt) do (
   if exist "%%f" copy /y "%%f" "dist\NAI-Factory-Hinchil\" >nul
 )
+rem Ship a shortcut with a relative path (best effort; the launcher refreshes it on first run)
+if exist shortcut-template.lnk copy /y shortcut-template.lnk "dist\NAI-Factory-Hinchil\NAI Factory.lnk" >nul
 if exist LICENSE.txt copy /y LICENSE.txt "dist\NAI-Factory-Hinchil\" >nul
 copy /y "models\censor_detect_v1.0_s.onnx" "dist\NAI-Factory-Hinchil\models\" >nul
 if errorlevel 1 goto fail
