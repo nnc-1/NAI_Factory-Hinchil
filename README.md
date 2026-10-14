@@ -174,6 +174,7 @@ NovelAI로 **캐릭터 × 동작**의 모든 조합을 차례대로 만들어서
 | --- | --- |
 | 모델 | V4.5 Full / V4.5 Curated / V5 Full / V5 Curated |
 | 크기 | 세로 832×1216 / 가로 1216×832 / 정사각 1024×1024 |
+| 샘플러 | Euler Ancestral(기본) / Euler / DPM++ 2S Ancestral / DPM++ 2M / DPM++ SDE |
 | 스텝 | 기본 28 |
 | 프롬프트 가이던스 | 기본 6 |
 | 가이던스 리스케일 | 기본 0.1 |
