@@ -269,5 +269,13 @@ module.exports = function createScanner({ H, ensure, isBusy }) {
     return store ? Object.keys(store.data.reviewed) : [];
   }
 
-  return { setReviewed, reviewedList, reviewedEdits, detectCached, prune, cleanupOrphans, results, start, stop, status, userBusy, flushAll };
+  // 완전 초기화: 스캔을 멈추고, 메모리와 캐시 폴더(감지 결과, 검수 표시, 마지막 폴더 기억)를 모두 비워요
+  function resetAll() {
+    try { stop(); } catch (e) { /* 실행 중이 아니면 무시 */ }
+    for (const s of stores.values()) if (s.timer) clearTimeout(s.timer);
+    stores.clear();
+    fs.rmSync(CACHE_DIR, { recursive: true, force: true });
+  }
+
+  return { resetAll, setReviewed, reviewedList, reviewedEdits, detectCached, prune, cleanupOrphans, results, start, stop, status, userBusy, flushAll };
 };

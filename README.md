@@ -27,7 +27,7 @@
 
 ## 다운로드와 시작하기
 
-1. 오른쪽 **Releases**에서 최신 `hinchil-win-x64.zip`(또는 `hinchil.zip`)을 받아요.
+1. 오른쪽 **Releases**에서 최신 `NAI-Factory-Hinchil-win-x64.zip`을 받아요.
 2. 압축을 풀어요.
 3. `start-gui.bat`을 **더블클릭**해요. 검은 창이 뜨는데, 쓰는 동안은 닫지 마세요. (닫으면 꺼져요.) 반대로 **브라우저 창(탭)을 모두 닫으면 검은 창도 몇 초 뒤 저절로 꺼져요.** (폴더 전체 실행 중에는 꺼지지 않아요)
 4. 브라우저가 자동으로 열려요. 안 열리면 검은 창에 적힌 주소(보통 `http://127.0.0.1:5177`)를 주소창에 입력해요.
@@ -349,7 +349,7 @@ NAI_Factory-Hinchil/
 
 1. 내 PC에 Node.js가 있어야 해요. (`node.exe` 를 복사해서 넣어요)
 2. 처음에는 인터넷이 필요해요. (패키지와 모델을 내려받아요)
-3. 끝나면 `dist\hinchil-win-x64.zip` 이 만들어져요. 이 zip에는 `node.exe`, `node_modules`, 감지 모델이 모두 들어 있어요.
+3. 끝나면 `dist\NAI-Factory-Hinchil-win-x64.zip` 이 만들어져요. 이 zip에는 `node.exe`, `node_modules`, 감지 모델이 모두 들어 있어요.
 
 ---
 

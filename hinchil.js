@@ -22,18 +22,6 @@ const DETECTORS = {
     mode: 'stretch', // 비율 유지 없이 정사각형으로 늘려 넣음
     readMeta: true,
   },
-  nudenet: {
-    name: 'NudeNet (실사 위주)',
-    file: 'models/320n.onnx',
-    url: 'https://github.com/notAI-tech/NudeNet/releases/download/v3.4-weights/320n.onnx',
-    page: 'https://github.com/notAI-tech/NudeNet',
-    // GitHub에서 못 받으면 PyPI(파이썬 패키지 저장소)의 nudenet 패키지 안에 든 같은 파일을 꺼내 씀
-    pypi: { name: 'nudenet', version: '3.4.2', member: '320n.onnx' },
-    labels: core.NUDENET_LABELS,
-    size: 320,
-    mode: 'letterbox', // 오른쪽/아래를 검정으로 채워 정사각형으로 만든 뒤 축소
-    readMeta: false,
-  },
 };
 
 const DEFAULT_CONFIG = {
@@ -51,7 +39,7 @@ const DEFAULT_CONFIG = {
   feather: 0.3,                   // 가장자리 번짐 정도 (0=칼같이, 1=아주 넓게 흐림). 원형일 때만 적용
   threshold: 0.25,                // 감지 임계값. 낮을수록 더 많이 잡음 (놓침 줄고 오탐 늘어남)
   nmsIou: 0.45,                   // 겹치는 박스 정리 기준
-  detectors: ['anime'],           // 쓸 감지기: 'anime', 'nudenet'
+  detectors: ['anime'],           // 쓸 감지기
   parts: ['nipple_f', 'pussy', 'penis'], // 가릴 부위
   skipExisting: true,             // 결과 폴더에 이미 있는 파일은 건너뜀
   jpegQuality: 95,
@@ -87,11 +75,12 @@ function validateConfig(cfg) {
   if (!(cfg.mosaicSize >= 2 && cfg.mosaicSize <= 500)) throw new Error(`mosaicSize는 2~500: ${cfg.mosaicSize}`);
   if (!HEX_COLOR.test(cfg.fillColor)) throw new Error(`fillColor는 #rrggbb 형식: ${cfg.fillColor}`);
   if (!Array.isArray(cfg.parts)) throw new Error('parts는 목록이어야 해요');
+  // 예전 설정에 남아 있는 NudeNet 항목(항문 등)은 조용히 버림
+  cfg.parts = cfg.parts.filter((p) => !core.NUDENET_LABELS.includes(p));
+  if (Array.isArray(cfg.detectors)) { const had = cfg.detectors.length; cfg.detectors = cfg.detectors.filter((d) => d !== 'nudenet'); if (had && !cfg.detectors.length) cfg.detectors = ['anime']; }
   const bad = cfg.parts.filter((p) => !LABELS.includes(p));
   if (bad.length) throw new Error(`알 수 없는 부위: ${bad.join(', ')}`);
   if (!Array.isArray(cfg.detectors) || !cfg.detectors.length) throw new Error('감지기를 하나 이상 골라 주세요');
-  // NudeNet 전용 부위(항문 등)를 골랐으면 NudeNet도 자동으로 켬
-  if (cfg.parts.some((p) => core.NUDENET_LABELS.includes(p)) && !cfg.detectors.includes('nudenet')) cfg.detectors = cfg.detectors.concat('nudenet');
   const badDet = cfg.detectors.filter((d) => !DETECTORS[d]);
   if (badDet.length) throw new Error(`알 수 없는 감지기: ${badDet.join(', ')}`);
   return cfg;
@@ -132,44 +121,6 @@ async function downloadModel(url) {
   return buf;
 }
 
-// zip(whl) 파일 안에서 이름이 suffix로 끝나는 파일 하나를 꺼냄 (추가 패키지 없이 zlib만 사용)
-function extractFromZip(zip, suffix) {
-  const zlib = require('zlib');
-  let e = zip.length - 22;
-  while (e >= 0 && zip.readUInt32LE(e) !== 0x06054b50) e--;
-  if (e < 0) throw new Error('zip 형식이 아님');
-  const count = zip.readUInt16LE(e + 10);
-  let p = zip.readUInt32LE(e + 16);
-  for (let i = 0; i < count; i++) {
-    if (zip.readUInt32LE(p) !== 0x02014b50) break;
-    const method = zip.readUInt16LE(p + 10);
-    const csize = zip.readUInt32LE(p + 20);
-    const nlen = zip.readUInt16LE(p + 28);
-    const xlen = zip.readUInt16LE(p + 30);
-    const clen = zip.readUInt16LE(p + 32);
-    const lho = zip.readUInt32LE(p + 42);
-    const name = zip.toString('utf8', p + 46, p + 46 + nlen);
-    if (name.endsWith(suffix)) {
-      const start = lho + 30 + zip.readUInt16LE(lho + 26) + zip.readUInt16LE(lho + 28);
-      const data = zip.subarray(start, start + csize);
-      return method === 0 ? Buffer.from(data) : zlib.inflateRawSync(data);
-    }
-    p += 46 + nlen + xlen + clen;
-  }
-  throw new Error(`${suffix} 파일을 패키지 안에서 못 찾음`);
-}
-
-async function downloadFromPypi(spec) {
-  const meta = await (await fetch(`https://pypi.org/pypi/${spec.name}/${spec.version}/json`)).json();
-  const whl = (meta.urls || []).find((u) => u.packagetype === 'bdist_wheel');
-  if (!whl) throw new Error('받을 수 있는 휠 파일이 없음');
-  const res = await fetch(whl.url);
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  const buf = extractFromZip(Buffer.from(await res.arrayBuffer()), spec.member);
-  if (buf.length < 1e6) throw new Error('꺼낸 파일이 너무 작음');
-  return buf;
-}
-
 async function ensureModel(key) {
   const spec = DETECTORS[key];
   const p = path.resolve(__dirname, spec.file);
@@ -182,14 +133,6 @@ async function ensureModel(key) {
     buf = await downloadModel(spec.url);
   } catch (e) {
     errs.push(`${spec.url} → ${e.message}`);
-    if (spec.pypi) {
-      try {
-        console.log('  직접 주소가 안 돼서 PyPI에서 받아 볼게요...');
-        buf = await downloadFromPypi(spec.pypi);
-      } catch (e2) {
-        errs.push(`PyPI ${spec.pypi.name} → ${e2.message}`);
-      }
-    }
   }
   if (!buf) {
     throw new Error(
@@ -576,7 +519,7 @@ async function main() {
 module.exports = {
   LABELS, DETECTORS, DEFAULT_CONFIG, IMAGE_EXT,
   readUserConfig, validateConfig, loadConfig,
-  ensureModel, extractFromZip, readOnnxMeta, getSession, withLock,
+  ensureModel, readOnnxMeta, getSession, withLock,
   loadRaw, readPngTextChunks, injectPngChunks, detectWith, detectAll, censor, writeDebug, listImages, runBatch,
 };
 

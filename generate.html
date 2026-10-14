@@ -1,0 +1,215 @@
+<!doctype html>
+<!-- Made by 크랙 크리에이터 넉넉한 취향 (https://share.crack.wrtn.ai/4dihl6) 의 클로드 어시스턴트 서한결 제작 -->
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NAI Factory · Hinchil</title>
+<style>
+  :root {
+    --bg: #15171a; --panel: #1d2024; --panel2: #25292e; --line: #333840;
+    --text: #e6e8ea; --dim: #9aa1a9; --accent: #7aa2ff; --danger: #ff6b6b; --ok: #6bd49a; --warn: #ffcc66;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body { background: var(--bg); color: var(--text); font: 14px/1.45 "Malgun Gothic", system-ui, sans-serif;
+    display: grid; grid-template-columns: 310px 1fr; grid-template-rows: auto 1fr auto;
+    grid-template-areas: "nav nav" "side main" "foot foot"; }
+  button, input, select, textarea { font: inherit; color: inherit; }
+  button { background: var(--panel2); border: 1px solid var(--line); border-radius: 6px; padding: 6px 12px; cursor: pointer; }
+  button:hover { border-color: var(--accent); }
+  button.primary { background: var(--accent); color: #0b1020; border-color: var(--accent); font-weight: 700; }
+  button.danger { color: var(--danger); }
+  button.small { padding: 2px 8px; font-size: 12px; }
+  button:disabled { opacity: .45; cursor: default; }
+  input[type=text], input[type=password], input[type=number], select, textarea {
+    width: 100%; background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; color-scheme: dark; }
+  select option { background: var(--panel); color: var(--text); }
+  textarea { resize: vertical; line-height: 1.4; }
+  input:focus, select:focus, textarea:focus { outline: 1px solid var(--accent); }
+  input[type=range] { width: 100%; accent-color: var(--accent); }
+  input[type=checkbox] { accent-color: var(--accent); }
+  h2 { font-size: 12px; letter-spacing: .04em; color: var(--dim); margin: 18px 0 8px; font-weight: 600; }
+  h2:first-child { margin-top: 0; }
+  .hint { color: var(--dim); font-size: 12px; margin-top: 2px; }
+  .row { display: flex; gap: 6px; align-items: center; margin: 6px 0; }
+  .row > label { flex: 1; }
+  .row button { flex: none; white-space: nowrap; }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .chk { display: flex; gap: 8px; align-items: flex-start; margin: 4px 0; cursor: pointer; }
+  .chk input { margin-top: 3px; }
+  .lab { display: block; margin: 8px 0 3px; color: var(--dim); font-size: 12px; }
+
+  #nav { grid-area: nav; display: flex; align-items: center; gap: 4px; padding: 8px 14px; background: var(--panel); border-bottom: 1px solid var(--line); }
+  #nav a { color: var(--dim); text-decoration: none; padding: 6px 16px; border-radius: 6px; font-weight: 600; }
+  #nav a:hover { color: var(--text); background: var(--panel2); }
+  #nav a.on { background: var(--accent); color: #0b1020; }
+  #nav .brand { display: flex; align-items: baseline; gap: 8px; margin-right: 18px; padding: 0 4px; font-size: 19px; font-weight: 800; letter-spacing: .02em; color: var(--text); white-space: nowrap; }
+  #nav .brand .dot { color: var(--dim); font-weight: 400; }
+  #nav .sp { flex: 1; }
+  #nav .made { color: var(--dim); font-size: 12px; }
+  #nav .made a { color: var(--accent); text-decoration: none; padding: 0; font-weight: 600; }
+  #nav .made a:hover { text-decoration: underline; background: none; }
+
+  #side { grid-area: side; background: var(--panel); border-right: 1px solid var(--line); padding: 14px; overflow-y: auto; }
+  #keyState { font-size: 12px; margin-top: 4px; }
+  #keyState.ok { color: var(--ok); } #keyState.no { color: var(--warn); }
+
+  #main { grid-area: main; min-width: 0; min-height: 0; overflow-y: auto; padding: 14px; display: grid; grid-template-columns: 1fr 1fr; gap: 14px; align-items: start; }
+  .col { min-width: 0; }
+  .colhead { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; position: sticky; top: -14px; background: var(--bg); padding: 4px 0 8px; z-index: 2; }
+  .colhead h3 { margin: 0; font-size: 15px; flex: 1; }
+  .colhead .cnt { color: var(--accent); font-size: 13px; font-weight: 400; margin-left: 6px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 10px; margin-bottom: 10px; }
+  .card.off { opacity: .5; }
+  .card .head { display: flex; gap: 6px; align-items: center; }
+  .card .head input[type=text] { font-weight: 700; }
+  .card .body { margin-top: 6px; }
+  .card.fold .body { display: none; }
+  .card .btns { display: flex; gap: 3px; flex: none; }
+  .card .btns button { padding: 2px 7px; }
+  .seedrow { display: flex; gap: 6px; }
+
+  #foot { grid-area: foot; background: var(--panel); border-top: 1px solid var(--line); padding: 10px 14px; }
+  #runrow { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  #summary { color: var(--accent); font-weight: 700; }
+  #prog { flex: 1; min-width: 160px; height: 10px; background: var(--bg); border-radius: 99px; overflow: hidden; border: 1px solid var(--line); }
+  #prog > i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .2s; }
+  #stat { color: var(--dim); font-size: 12px; min-height: 18px; margin-top: 6px; }
+  #results { display: flex; gap: 8px; overflow-x: auto; padding: 8px 0 2px; min-height: 0; }
+  #results:empty::before { content: "생성한 그림이 여기에 쌓여요. 저장 폴더에 바로 저장돼요."; color: var(--dim); font-size: 12px; padding: 20px 0; }
+  .thumb { flex: none; cursor: pointer; position: relative; }
+  .thumb img { height: 128px; width: auto; max-width: 240px; object-fit: contain; border-radius: 6px; background: #000; display: block; border: 1px solid var(--line); }
+  .thumb:hover img { border-color: var(--accent); }
+  .thumb .cap { width: 0; min-width: 100%; font-size: 10px; color: var(--dim); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; margin-top: 2px; }
+  .thumb.fail .box { width: 96px; height: 128px; border-radius: 6px; border: 1px dashed var(--danger); color: var(--danger); font-size: 11px; padding: 6px; overflow: hidden; }
+
+  #lb { position: fixed; inset: 0; background: #000d; display: none; align-items: center; justify-content: center; z-index: 20; }
+  #lb.on { display: flex; }
+  #lb img { max-width: 92vw; max-height: 92vh; border-radius: 6px; }
+  #lb .x { position: absolute; top: 14px; right: 18px; font-size: 20px; }
+  #lb .cap { position: absolute; bottom: 14px; left: 50%; transform: translateX(-50%); color: var(--dim); font-size: 12px; }
+  #dropOv { position: fixed; inset: 0; background: #0b1020cc; border: 3px dashed var(--accent); display: none; align-items: center; justify-content: center; font-size: 22px; font-weight: 700; z-index: 40; pointer-events: none; }
+  #dropOv.on { display: flex; }
+  #tagDlg { position: fixed; inset: 0; background: #000b; display: none; align-items: center; justify-content: center; z-index: 25; }
+  #tagDlg.on { display: flex; }
+  #tagDlg .box { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px; width: min(720px, 94vw); max-height: 88vh; overflow-y: auto; }
+  #tagDlg .dh { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; font-size: 15px; }
+  #tagDlg .dh .x { margin-left: auto; }
+  #tagDlg .sec { margin: 12px 0; }
+  #tagDlg textarea { width: 100%; }
+  #tagDlg .btns2 { display: flex; gap: 6px; margin-top: 6px; }
+  #tagDlg .dim { color: var(--dim); font-size: 12px; }
+  #toast { position: fixed; left: 50%; bottom: 90px; transform: translateX(-50%); background: #000d; border: 1px solid var(--line); padding: 8px 16px; border-radius: 8px; display: none; z-index: 30; max-width: 80vw; }
+  @media (max-width: 1100px) { body { grid-template-columns: 260px 1fr; } #main { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+
+<nav id="nav">
+  <span class="brand"><span>NAI Factory</span><span class="dot">·</span><span>Hinchil</span></span>
+  <a href="/generate" class="on">팩토리</a><a href="/">흰칠</a><a href="https://github.com/nnc-1/NAI_Factory-Hinchil#readme" target="_blank" rel="noopener noreferrer" title="사용법을 웹 README로 열어요 (인터넷 필요)">도움말 ↗</a>
+  <span class="sp"></span><button id="tagPick" type="button" title="PNG를 여기로 끌어다 놓아도 돼요">🖼 그림에서 태그 가져오기</button><input type="file" id="tagFile" accept="image/png" hidden><span class="made" style="margin-left:14px">크랙 크리에이터 <a href="https://share.crack.wrtn.ai/4dihl6" target="_blank" rel="noopener noreferrer">넉넉한 취향</a>의 클로드 어시스턴트 서한결 제작</span>
+</nav>
+
+<aside id="side">
+  <h2>NovelAI 키</h2>
+  <div class="row"><input type="password" id="apiKey" placeholder="pst-..." autocomplete="off"><button id="keyShow" class="small" title="보기/숨기기">보기</button><button id="keyClear" class="small danger">지우기</button></div>
+  <div id="keyState"></div>
+  <div class="hint">이 브라우저에만 저장돼요. 파일로 남기거나 밖으로 보내지 않아요. (NovelAI로 요청할 때만 쓰여요)</div>
+
+  <h2>저장 폴더</h2>
+  <div class="row"><input type="text" id="saveDir" placeholder="예: 생성 (앱 폴더 안) 또는 D:\그림\생성"><button id="pickDir">찾기</button></div>
+  <div class="hint" id="dirWhere" style="word-break:break-all"></div>
+  <div class="row"><button id="openDir" class="small">폴더 열기</button><span class="hint" style="margin:0">생성하는 대로 바로 저장돼요</span></div>
+
+  <h2>공통 프롬프트</h2>
+  <label class="lab" for="artist">작가 태그 (메인 프롬프트 맨 앞)</label>
+  <textarea id="artist" rows="4" placeholder="artist:..., ..."></textarea>
+  <label class="lab" for="negCommon">공통 네거티브</label>
+  <textarea id="negCommon" rows="4"></textarea>
+
+  <h2>생성 설정</h2>
+  <label class="lab" for="model">모델</label>
+  <select id="model">
+    <option value="nai-diffusion-4-5-full">V4.5 Full</option>
+    <option value="nai-diffusion-4-5-curated">V4.5 Curated</option>
+    <option value="nai-diffusion-5-full">V5 Full</option>
+    <option value="nai-diffusion-5-curated">V5 Curated</option>
+  </select>
+  <label class="lab" for="size">크기</label>
+  <select id="size">
+    <option value="832x1216">세로 (832x1216)</option>
+    <option value="1216x832">가로 (1216x832)</option>
+    <option value="1024x1024">정사각 (1024x1024)</option>
+  </select>
+  <div class="two">
+    <div><label class="lab" for="steps">스텝</label><input type="number" id="steps" min="1" max="50"></div>
+    <div><label class="lab" for="scale">프롬프트 가이던스</label><input type="number" id="scale" step="0.1" min="0"></div>
+    <div><label class="lab" for="rescale">가이던스 리스케일</label><input type="number" id="rescale" step="0.05" min="0" max="1"></div>
+    <div><label class="lab" for="sampler">샘플러</label>
+      <select id="sampler"><option value="k_euler_ancestral">Euler Ancestral (기본)</option><option value="k_euler">Euler</option><option value="k_dpmpp_2s_ancestral">DPM++ 2S Ancestral</option><option value="k_dpmpp_2m">DPM++ 2M</option><option value="k_dpmpp_sde">DPM++ SDE</option></select></div>
+    <div style="grid-column:1/-1"><label class="lab" for="uc">네거티브 프리셋</label>
+      <select id="uc"><option value="0">Heavy (기본)</option><option value="1">Light</option><option value="2">Human Focus</option><option value="3">None</option></select></div>
+  </div>
+  <label class="chk"><input type="checkbox" id="quality"><span>품질 태그 추가 <span class="hint">(very aesthetic, masterpiece, no text)</span></span></label>
+  <label class="chk"><input type="checkbox" id="variety"><span>Variety+ <span class="hint" id="varietyHint">(다양성 증가)</span></span></label>
+
+  <h2>생성 순서와 간격</h2>
+  <select id="order">
+    <option value="action">동작 기준 (동작1: 캐릭터 전원 → 동작2 …)</option>
+    <option value="character">캐릭터 기준 (캐릭터1: 동작 전부 → 캐릭터2 …)</option>
+  </select>
+  <label class="chk" style="margin-top:8px"><input type="checkbox" id="rndDelay"><span>장 사이 0.1~2초 무작위로 쉬기</span></label>
+  <div class="row"><label for="delay">고정 간격</label><span id="delayV" style="color:var(--accent)"></span></div>
+  <input type="range" id="delay" min="0" max="10" step="0.1">
+</aside>
+
+<main id="main">
+  <section class="col">
+    <div class="colhead">
+      <h3>캐릭터<span class="cnt" id="charCnt"></span></h3>
+      <button class="small" id="charImport" title="캐릭터 목록 TXT 불러오기">불러오기</button>
+      <button class="small" id="charExport" title="캐릭터 목록 TXT로 저장">저장</button>
+      <button class="small" id="charAll"></button>
+      <button class="small primary" id="charAdd">+ 추가</button>
+      <input type="file" id="charFile" accept=".txt,text/plain" hidden>
+    </div>
+    <div id="chars"></div>
+  </section>
+  <section class="col">
+    <div class="colhead">
+      <h3>동작<span class="cnt" id="actCnt"></span></h3>
+      <button class="small" id="actImport" title="동작 목록 TXT 불러오기">불러오기</button>
+      <button class="small" id="actExport" title="동작 목록 TXT로 저장">저장</button>
+      <button class="small" id="actAll"></button>
+      <button class="small primary" id="actAdd">+ 추가</button>
+      <input type="file" id="actFile" accept=".txt,text/plain" hidden>
+    </div>
+    <div id="acts"></div>
+  </section>
+</main>
+
+<footer id="foot">
+  <div id="runrow">
+    <span id="summary"></span>
+    <button id="btnTest" title="체크된 첫 캐릭터로, 동작 없이 한 장만">테스트 1장</button>
+    <button id="btnStart" class="primary">전체 생성</button>
+    <button id="btnStop" class="danger" style="display:none">중단</button>
+    <div id="prog"><i></i></div>
+    <span id="count" style="color:var(--dim);font-size:12px"></span>
+    <button id="btnOpen" class="small">폴더 열기</button>
+    <button id="btnClearPrev" class="small" title="아래 미리보기만 지워요. 저장된 그림 파일은 그대로예요">미리보기 지우기</button>
+    <button id="btnCensor" class="small" title="저장 폴더를 그림 폴더로 해서 흰칠 탭으로 가요">이 폴더 흰칠하러 가기 →</button>
+  </div>
+  <div id="stat"></div>
+  <div id="results"></div>
+</footer>
+
+<div id="lb"><button class="x" id="lbX">✕</button><img id="lbImg" alt=""><div class="cap" id="lbCap"></div></div>
+<div id="tagDlg"></div>
+<div id="dropOv">PNG를 놓으면 태그를 읽어요</div>
+<div id="toast"></div>
+<script src="/generate.js"></script>
+</body>
+</html>

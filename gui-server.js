@@ -1,6 +1,6 @@
 'use strict';
 // Made by 크랙 크리에이터 넉넉한 취향 (https://share.crack.wrtn.ai/4dihl6) 의 클로드 어시스턴트 서한결 제작
-// 흰칠 GUI 서버: 내 PC(127.0.0.1)에서만 열리는 작은 웹 화면.
+// NAI Factory · Hinchil GUI 서버: 내 PC(127.0.0.1)에서만 열리는 작은 웹 화면.
 // 브라우저에서 파라미터를 바꿔 가며 미리보기하고, 폴더 전체 실행까지 함.
 
 const http = require('http');
@@ -91,6 +91,7 @@ function writeLast(inputDir, outputDir, outInside) {
 
 // 감지 결과 저장 + 백그라운드 미리 스캔
 const scanner = require('./scan')({ H, ensure, isBusy: () => job.state === 'running' });
+const genApi = require('./gen-api');
 
 function startJob(cfg, debug) {
   const reviewed = cfg.skipReviewed ? new Set(scanner.reviewedList(abs(cfg.inputDir))) : null;
@@ -298,21 +299,49 @@ async function handle(req, res, port) {
       res.writeHead(200, { 'Content-Type': MIME['.html'], 'Cache-Control': 'no-store' });
       return res.end(fs.readFileSync(path.join(__dirname, 'gui.html')));
     }
+    if (req.method === 'GET' && (u.pathname === '/generate' || u.pathname === '/generate.html')) {
+      res.writeHead(200, { 'Content-Type': MIME['.html'], 'Cache-Control': 'no-store' });
+      return res.end(fs.readFileSync(path.join(__dirname, 'generate.html')));
+    }
+    if (req.method === 'GET' && u.pathname === '/generate.js') {
+      res.writeHead(200, { 'Content-Type': MIME['.js'], 'Cache-Control': 'no-store' });
+      return res.end(fs.readFileSync(path.join(__dirname, 'generate.js')));
+    }
+    if (req.method === 'GET' && u.pathname === '/api/gen/where') {
+      return sendJson(res, 200, { abs: abs(String(q.get('dir') || '').trim()) }); // 상대경로는 앱 폴더 기준
+    }
+    // 생성 탭: NovelAI로 한 장 요청하고 폴더에 저장 (API 키는 요청 때만 받아서 쓰고 저장하지 않음)
+    if (req.method === 'POST' && u.pathname === '/api/gen/image') {
+      const body = await readBody(req);
+      const out = await genApi.generate({ key: String(req.headers['x-nai-key'] || '').trim(), body: body.body, dir: abs(String(body.dir || '').trim()), filename: body.filename });
+      return sendJson(res, 200, out);
+    }
     if (req.method === 'GET' && u.pathname === '/core.js') {
       res.writeHead(200, { 'Content-Type': MIME['.js'], 'Cache-Control': 'no-store' });
       return res.end(fs.readFileSync(path.join(__dirname, 'core.js')));
     }
 
     // 설정
+    // 열려 있는 화면이 2초마다 신호를 보내요. 모두 닫히면 서버도 스스로 꺼져요 (--keep-alive 로 끌 수 있어요)
+    if (req.method === 'POST' && u.pathname === '/api/hb') { clients.set(String(q.get('id') || ''), Date.now()); everSeen = true; return sendJson(res, 200, { ok: true }); }
+    if (req.method === 'POST' && u.pathname === '/api/bye') { clients.delete(String(q.get('id') || '')); lastGone = Date.now(); return sendJson(res, 200, { ok: true }); }
+    if (req.method === 'GET' && u.pathname === '/api/ping') return sendJson(res, 200, { app: 'hinchil', dir: __dirname });
     if (req.method === 'GET' && u.pathname === '/api/config') {
       const cfg = H.readUserConfig();
       const last = readLast();
-      const lastIn = last.inputDir && fs.existsSync(last.inputDir) ? last.inputDir : '';
+      const lastIn = last.inputDir && fs.existsSync(abs(last.inputDir)) ? last.inputDir : '';
+      let inputAbs = cfg.inputDir ? abs(cfg.inputDir) : lastIn;
+      let outInside = cfg.outInside || last.outInside;
+      // 처음 켰을 때(저장된 폴더가 하나도 없을 때)의 기본값: 그림 폴더 '생성'(앱 폴더 기준 상대경로), 결과는 그 안 output
+      if (!inputAbs && !cfg.outputDir && !fs.existsSync(LAST_FILE)) {
+        inputAbs = '생성'; outInside = true;
+        try { fs.mkdirSync(abs('생성'), { recursive: true }); } catch (e) { /* 못 만들어도 괜찮아요 */ }
+      }
       return sendJson(res, 200, {
         cfg,
-        inputAbs: cfg.inputDir ? abs(cfg.inputDir) : lastIn,
+        inputAbs,
         outputAbs: cfg.outputDir ? abs(cfg.outputDir) : last.outputDir,
-        outInside: cfg.outInside || last.outInside,
+        outInside,
         detectorInfo: Object.fromEntries(Object.entries(H.DETECTORS).map(([k, d]) => [k, { name: d.name, file: d.file, url: d.url, page: d.page }])),
         model: modelOverall(cfg.detectors),
       });
@@ -322,6 +351,14 @@ async function handle(req, res, port) {
       const keep = {};
       for (const k of ['inputDir', 'outputDir', 'recursive', 'mode', 'shape', 'fillColor', 'mosaicSize', 'padding', 'feather', 'threshold', 'detectors', 'parts', 'skipExisting', 'skipReviewed', 'outInside', 'keepMetadata']) keep[k] = cfg[k];
       fs.writeFileSync(path.join(__dirname, 'config.json'), JSON.stringify(keep, null, 2) + '\n', 'utf8');
+      return sendJson(res, 200, { ok: true });
+    }
+    // 완전 초기화: 캐시 폴더 + config.json 삭제. 그림 파일과 결과 폴더는 건드리지 않아요
+    if (req.method === 'POST' && u.pathname === '/api/reset') {
+      if (job.state === 'running') throw new Error('폴더 전체 실행 중에는 초기화할 수 없어요. 끝나거나 멈춘 뒤에 눌러 주세요');
+      scanner.resetAll();
+      thumbCache.clear();
+      fs.rmSync(path.join(__dirname, 'config.json'), { force: true });
       return sendJson(res, 200, { ok: true });
     }
     if (req.method === 'GET' && u.pathname === '/api/model') {
@@ -390,8 +427,8 @@ async function handle(req, res, port) {
     // 결과 폴더(그림 폴더/output) 만들기. 이름이 output인 폴더만, 절대 경로만 만듦
     if (req.method === 'POST' && u.pathname === '/api/mkdir') {
       const body = await readBody(req);
-      const dir = String(body.dir || '');
-      if (!path.isAbsolute(dir) || path.basename(dir.replace(/[\\/]+$/, '')) !== 'output') throw new Error('output 폴더만 만들 수 있어요');
+      const dir = abs(String(body.dir || '').trim());
+      if (!dir || path.basename(dir.replace(/[\\/]+$/, '')) !== 'output') throw new Error('output 폴더만 만들 수 있어요');
       fs.mkdirSync(dir, { recursive: true });
       return sendJson(res, 200, { ok: true });
     }
@@ -480,21 +517,56 @@ async function handle(req, res, port) {
   }
 }
 
-function listen(port, tries) {
+// 포트는 5177 하나로 고정해요. 브라우저는 주소(포트)마다 저장 공간이 따로라서, 포트가 바뀌면 API 키 같은 값이 사라져 보이기 때문이에요.
+// 이미 쓰는 중이면 번호를 올리지 않고, 같은 폴더의 NAI Factory · Hinchil이면 그 창을 열어 주고 끝내요.
+const openUrl = (url) => { if (process.platform === 'win32' && !process.argv.includes('--no-open')) spawn('cmd', ['/c', 'start', '', url], { detached: true, stdio: 'ignore' }).unref(); };
+function whoUses(port) {
+  return new Promise((resolve) => {
+    const r = http.get({ host: '127.0.0.1', port, path: '/api/ping', timeout: 1500 }, (res) => {
+      let d = ''; res.on('data', (c) => { d += c; });
+      res.on('end', () => { try { const j = JSON.parse(d); resolve(j && j.app === 'hinchil' ? j : null); } catch (e) { resolve(null); } });
+    });
+    r.on('error', () => resolve(null)); r.on('timeout', () => { r.destroy(); resolve(null); });
+  });
+}
+const clients = new Map();
+let everSeen = false, lastGone = Date.now();
+function autoQuit() {
+  if (process.argv.includes('--keep-alive')) return;
+  setInterval(() => {
+    const now = Date.now();
+    for (const [id, t] of clients) if (now - t > 5 * 60 * 1000) { clients.delete(id); lastGone = now; } // 닫는 신호 없이 사라진 화면
+    if (everSeen && clients.size === 0 && now - lastGone > 2000 && job.state !== 'running') {
+      console.log('브라우저 창이 모두 닫혀서 NAI Factory · Hinchil을 종료해요.');
+      process.exit(0);
+    }
+  }, 500).unref();
+}
+function listen(port) {
   const server = http.createServer((req, res) => handle(req, res, port));
-  server.on('error', (e) => {
-    if (e.code === 'EADDRINUSE' && tries > 0) listen(port + 1, tries - 1);
-    else {
-      console.error('서버를 열 수 없어요: ' + e.message);
+  server.on('error', async (e) => {
+    if (e.code !== 'EADDRINUSE') { console.error('서버를 열 수 없어요: ' + e.message); process.exitCode = 1; return; }
+    const other = await whoUses(port), url = `http://127.0.0.1:${port}/`;
+    if (other && path.resolve(other.dir) === path.resolve(__dirname)) {
+      console.log(`이미 켜져 있어요: ${url}`);
+      console.log('열려 있는 창으로 이동할게요. (이 검은 창은 닫아도 돼요)');
+      openUrl(url);
+    } else if (other) {
+      console.error(`다른 폴더의 NAI Factory · Hinchil이 이미 켜져 있어요. (${other.dir})`);
+      console.error('그 검은 창을 먼저 닫고 다시 실행해 주세요. (같은 주소를 같이 쓸 수 없어요)');
+      process.exitCode = 1;
+    } else {
+      console.error(`${port}번 포트를 다른 프로그램이 쓰고 있어요. 그 프로그램을 끄고 다시 실행해 주세요.`);
       process.exitCode = 1;
     }
   });
   server.listen(port, '127.0.0.1', () => {
     const url = `http://127.0.0.1:${port}/`;
-    console.log(`흰칠 GUI: ${url}`);
-    console.log('이 창을 닫으면 GUI도 꺼져요.');
+    console.log(`NAI Factory · Hinchil: ${url}`);
+    console.log('브라우저 창을 닫으면 이 창도 자동으로 꺼져요. 이 창을 끄면 작동하지 않아요.');
     console.log('Made by 크랙 크리에이터 넉넉한 취향 (https://share.crack.wrtn.ai/4dihl6) 의 클로드 어시스턴트 서한결 제작');
-    if (process.platform === 'win32' && !process.argv.includes('--no-open')) spawn('cmd', ['/c', 'start', '', url], { detached: true, stdio: 'ignore' }).unref();
+    openUrl(url);
+    autoQuit();
     try {
       warmup(H.readUserConfig().detectors);
     } catch (e) {
@@ -511,4 +583,4 @@ try {
 } catch (e) {
   /* 무시 */
 }
-listen(BASE_PORT, 10);
+listen(BASE_PORT);
