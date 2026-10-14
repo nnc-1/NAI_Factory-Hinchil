@@ -39,6 +39,10 @@ NAI 그림의 노출 부위를 **자동으로 흰칠/모자이크**해 주는 �
 - 애니 그림용: [deepghs/anime_censor_detection](https://huggingface.co/deepghs/anime_censor_detection) (모델 페이지에 MIT로 표시)
 - 항문 등: [NudeNet](https://github.com/notAI-tech/NudeNet) 3.4.2 (라이선스 표기가 MIT와 AGPL-3.0으로 엇갈려 있어요. 쓰기 전에 원 저장소에서 조건을 확인해 주세요.)
 
+## 라이선스
+
+흰칠 코드는 [MIT 라이선스](LICENSE)예요. 감지 모델은 각 모델의 라이선스를 따라요.
+
 ## Made by
 
 크랙 크리에이터 [넉넉한 취향](https://share.crack.wrtn.ai/4dihl6)의 클로드 어시스턴트 서한결 제작
