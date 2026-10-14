@@ -540,7 +540,7 @@ function init() {
       const w = await api('/api/gen/where?dir=' + encodeURIComponent(S.saveDir.trim()));
       await api('/api/last', { inputDir: w.abs, outputDir: cfg.outputAbs || '', outInside: !!cfg.outInside });
     } catch (e) { /* 못 넘겨도 검열 화면으로는 가요 */ }
-    location.href = '/';
+    location.href = '/censor';
   });
 
   $('charAdd').addEventListener('click', () => { S.chars.push(newChar(`캐릭터 ${S.chars.length + 1}`)); save(); renderChars(); $('chars').lastElementChild?.scrollIntoView({ block: 'nearest' }); });

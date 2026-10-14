@@ -295,11 +295,12 @@ async function handle(req, res, port) {
 
   try {
     // 정적 파일
-    if (req.method === 'GET' && (u.pathname === '/' || u.pathname === '/index.html')) {
+    if (req.method === 'GET' && (u.pathname === '/censor' || u.pathname === '/censor.html')) {
       res.writeHead(200, { 'Content-Type': MIME['.html'], 'Cache-Control': 'no-store' });
       return res.end(fs.readFileSync(path.join(__dirname, 'gui.html')));
     }
-    if (req.method === 'GET' && (u.pathname === '/generate' || u.pathname === '/generate.html')) {
+    // 첫 화면 = 팩토리. (/generate 는 예전 주소라 그대로 받아 줘요)
+    if (req.method === 'GET' && (u.pathname === '/' || u.pathname === '/index.html' || u.pathname === '/generate' || u.pathname === '/generate.html')) {
       res.writeHead(200, { 'Content-Type': MIME['.html'], 'Cache-Control': 'no-store' });
       return res.end(fs.readFileSync(path.join(__dirname, 'generate.html')));
     }
