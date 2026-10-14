@@ -325,6 +325,13 @@ async function handle(req, res, port) {
     // 열려 있는 화면이 2초마다 신호를 보내요. 모두 닫히면 서버도 스스로 꺼져요 (--keep-alive 로 끌 수 있어요)
     if (req.method === 'POST' && u.pathname === '/api/hb') { clients.set(String(q.get('id') || ''), Date.now()); everSeen = true; return sendJson(res, 200, { ok: true }); }
     if (req.method === 'POST' && u.pathname === '/api/bye') { clients.delete(String(q.get('id') || '')); lastGone = Date.now(); return sendJson(res, 200, { ok: true }); }
+    // 팩토리의 '장 사이 쉬기'용: 주어진 시간(최대 60초) 뒤에 답해요
+    if (req.method === 'GET' && u.pathname === '/api/sleep') {
+      const ms = Math.min(60000, Math.max(0, Number(q.get('ms')) || 0));
+      const t = setTimeout(() => { if (!res.writableEnded) sendJson(res, 200, { ok: true }); }, ms);
+      res.on('close', () => clearTimeout(t));
+      return;
+    }
     if (req.method === 'GET' && u.pathname === '/api/ping') return sendJson(res, 200, { app: 'hinchil', dir: __dirname });
     if (req.method === 'GET' && u.pathname === '/api/config') {
       const cfg = H.readUserConfig();

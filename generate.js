@@ -62,9 +62,14 @@ function parseSeed(v) {
   const n = Number(s);
   return Number.isInteger(n) && n >= 0 && n <= MAX_SEED ? n : NaN;
 }
+// 쉬는 시간은 서버에 맡겨요. 브라우저는 안 보이는 탭의 타이머를 1분에 한 번으로 묶어 버려서, 탭을 숨기면 장당 대기가 한참 늘어나요.
+// (네트워크 응답을 기다리는 건 그런 제한을 안 받아요.) 중단 버튼을 누르면 바로 깨어나요.
 async function sleep(ms) {
-  const end = Date.now() + ms;
-  while (!run.stop && Date.now() < end) await new Promise((r) => setTimeout(r, Math.min(100, end - Date.now())));
+  if (run.stop || !(ms > 0)) return;
+  const ac = new AbortController(); run.abort = ac;
+  try { await fetch('/api/sleep?ms=' + Math.round(ms), { signal: ac.signal }); }
+  catch (e) { if (!ac.signal.aborted) await new Promise((r) => setTimeout(r, ms)); } // 서버를 못 부르면 그냥 타이머로
+  finally { if (run.abort === ac) run.abort = null; }
 }
 function download(name, text) {
   const a = document.createElement('a');
@@ -564,7 +569,7 @@ function init() {
     const c = S.chars.find((x) => x.on); if (!c) return toast('체크된 캐릭터가 없어요');
     start([{ c, a: { name: '테스트', tags: '' } }]);
   });
-  $('btnStop').addEventListener('click', () => { run.stop = true; $('stat').textContent = '중단 요청됨 - 지금 만드는 장까지만 받고 멈춰요'; });
+  $('btnStop').addEventListener('click', () => { run.stop = true; if (run.abort) run.abort.abort(); $('stat').textContent = '중단 요청됨 - 지금 만드는 장까지만 받고 멈춰요'; });
 
   $('lb').addEventListener('click', (e) => { if (e.target === $('lb')) closeLb(); });
   $('lbX').addEventListener('click', closeLb);
