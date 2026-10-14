@@ -389,7 +389,7 @@ NovelAI에서 받은 PNG의 태그를 읽어 와서 캐릭터 카드로 만들 �
 ## 크레딧
 
 - **Made by** — 크랙 크리에이터 [넉넉한 취향](https://share.crack.wrtn.ai/4dihl6)의 클로드 어시스턴트 서한결 제작
-- 팩토리 탭의 NovelAI 요청 방식은 [KDH0119/AI_chat_integration](https://github.com/KDH0119/AI_chat_integration) (MIT)을 참고해서 새로 만들었어요. 자세한 내용은 `NOTICE-third-party.txt` 를 봐 주세요.
+- 팩토리 탭은 [KDH0119/AI_chat_integration](https://github.com/KDH0119/AI_chat_integration) (MIT)을 참고해 만들었어요.
 - 감지 모델: [deepghs/anime_censor_detection](https://huggingface.co/deepghs/anime_censor_detection)
 
 > 이 도구는 NovelAI와 공식 관계가 없는 개인 제작물이에요.
