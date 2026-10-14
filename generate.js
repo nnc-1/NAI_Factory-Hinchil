@@ -596,7 +596,7 @@ init();
         if (++fails >= 1 && !bar) {
           bar = document.createElement('div');
           bar.style.cssText = 'position:fixed;inset:0;z-index:99;background:#0b1020ee;color:#fff;display:flex;align-items:center;justify-content:center;text-align:center;font:600 18px/1.7 sans-serif;padding:24px';
-          bar.textContent = 'NAI Factory · Hinchil이 꺼졌어요 (검은 창이 닫혔어요). 이 탭을 닫아 주세요.\n다시 쓰려면 start-gui.bat 을 실행하세요.';
+          bar.textContent = 'NAI Factory · Hinchil이 꺼졌어요 (검은 창이 닫혔어요). 이 탭을 닫아 주세요.\n다시 쓰려면 "Start NAI Factory.bat"(또는 NAI Factory 바로가기)을 실행하세요.';
           bar.style.whiteSpace = 'pre-line'; document.body.appendChild(bar);
         }
       });

@@ -569,10 +569,24 @@ function listen(port) {
   });
   server.listen(port, '127.0.0.1', () => {
     const url = `http://127.0.0.1:${port}/`;
-    let ver = ''; try { ver = ' v' + require('./package.json').version; } catch (e) { /* 없어도 괜찮아요 */ }
-    console.log(`NAI Factory · Hinchil${ver}: ${url}`);
-    console.log('브라우저 창을 닫으면 이 창도 자동으로 꺼져요. 이 창을 끄면 작동하지 않아요.');
-    console.log('Made by 크랙 크리에이터 넉넉한 취향 (https://share.crack.wrtn.ai/4dihl6) 의 클로드 어시스턴트 서한결 제작');
+    let ver = ''; try { ver = 'v' + require('./package.json').version; } catch (e) { /* 없어도 괜찮아요 */ }
+    // 검은 창 꾸미기 (색은 진짜 콘솔일 때만 써요)
+    const tty = process.stdout.isTTY && !process.env.NO_COLOR;
+    const c = (code, t) => (tty ? `\x1b[${code}m${t}\x1b[0m` : t);
+    const title = `NAI Factory · Hinchil   ${ver}`;
+    // 한국어 윈도우 콘솔은 선 문자와 가운뎃점을 두 칸으로 그릴 때가 있어서, 오른쪽 테두리 없이 위아래 선만 써요
+    const line = '─'.repeat(title.length + 4);
+    console.log('');
+    console.log(c('36', `  ${line}`));
+    console.log('    ' + c('1;36', title));
+    console.log(c('36', `  ${line}`));
+    console.log('');
+    console.log(`   ${c('32', '▶')} 주소    ${c('1;32', url)}`);
+    console.log(c('90', '   ● 브라우저 창을 닫으면 이 창도 자동으로 꺼져요.'));
+    console.log(c('90', '   ● 이 창을 끄면 작동하지 않아요.'));
+    console.log('');
+    console.log(c('90', '   Made by 크랙 크리에이터 넉넉한 취향 (https://share.crack.wrtn.ai/4dihl6) 의 클로드 어시스턴트 서한결 제작'));
+    console.log('');
     openUrl(url);
     autoQuit();
     try {

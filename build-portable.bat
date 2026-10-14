@@ -26,7 +26,9 @@ if exist dist rmdir /s /q dist
 mkdir dist\NAI-Factory-Hinchil\models
 
 echo [3/6] Copying files...
-for %%f in (core.js hinchil.js gui-server.js gui.html scan.js gen-api.js generate.html generate.js package.json start-gui.bat README.txt LICENSE NOTICE-anime-censor.txt NOTICE-third-party.txt) do (
+copy /y "Start NAI Factory.bat" "dist\NAI-Factory-Hinchil\" >nul
+if errorlevel 1 (echo "Start NAI Factory.bat" is missing. & goto fail)
+for %%f in (core.js hinchil.js gui-server.js gui.html scan.js gen-api.js generate.html generate.js package.json icon.ico README.txt LICENSE NOTICE-anime-censor.txt NOTICE-third-party.txt) do (
   if exist "%%f" copy /y "%%f" "dist\NAI-Factory-Hinchil\" >nul
 )
 if exist LICENSE.txt copy /y LICENSE.txt "dist\NAI-Factory-Hinchil\" >nul
@@ -65,7 +67,7 @@ if errorlevel 1 (
 
 echo.
 echo DONE: dist\%ZIP%
-echo Test it: unzip somewhere else and double-click start-gui.bat
+echo Test it: unzip somewhere else and double-click "Start NAI Factory.bat"
 pause
 exit /b 0
 :fail
