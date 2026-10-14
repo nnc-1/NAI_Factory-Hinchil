@@ -42,7 +42,7 @@
 | 인터넷 | 흰칠은 **필요 없어요**. 팩토리 탭은 NovelAI와 통신하므로 필요해요 |
 | NovelAI 계정 | 팩토리 탭을 쓸 때만 필요해요 (API 키) |
 
-화면 위쪽 제목줄의 **흰칠 | 팩토리** 탭으로 두 기능을 오갈 수 있어요. 팩토리 탭의 주소는 `http://127.0.0.1:5177/generate` 예요.
+화면 위쪽 제목줄의 **팩토리 | 흰칠** 탭으로 두 기능을 오갈 수 있어요. 팩토리 탭의 주소는 `http://127.0.0.1:5177/generate` 예요.
 
 ---
 
@@ -390,7 +390,7 @@ NovelAI에서 받은 PNG의 태그를 읽어 와서 캐릭터 카드로 만들 �
 ## 크레딧
 
 - **Made by** — 크랙 크리에이터 [넉넉한 취향](https://share.crack.wrtn.ai/4dihl6)의 클로드 어시스턴트 서한결 제작
-- 팩토리 탭은 [KDH0119/AI_chat_integration](https://github.com/KDH0119/AI_chat_integration) (MIT)을 참고해 만들었어요.
+- 팩토리 탭은 [KDH0119님의 AI_chat_integration](https://github.com/KDH0119/AI_chat_integration) (MIT)과 Novel-AI-Image-Add-Generator에서 영감을 받아 새로 만들었어요.
 - 감지 모델: [deepghs/anime_censor_detection](https://huggingface.co/deepghs/anime_censor_detection)
 
 > 이 도구는 NovelAI와 공식 관계가 없는 개인 제작물이에요.
