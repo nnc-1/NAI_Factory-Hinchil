@@ -4,13 +4,17 @@ rem ---------------------------------------------------------------
 rem  build-portable.bat : makes a no-install zip (node.exe + packages + model)
 rem  Run this on YOUR PC, in the same folder as gui-server.js.
 rem  Needs: Node.js installed on your PC, internet (first time).
-rem  Result: dist\NAI-Factory-Hinchil-win-x64.zip
+rem  Result: dist\NAI-Factory-Hinchil-v(version)-win-x64.zip
 rem ---------------------------------------------------------------
 cd /d "%~dp0"
 where node >nul 2>nul
 if errorlevel 1 (echo Node.js is not installed. & goto fail)
 where npm >nul 2>nul
 if errorlevel 1 (echo npm not found. & goto fail)
+
+set "VER=0"
+for /f "usebackq delims=" %%v in (`node -p "require('./package.json').version"`) do set "VER=%%v"
+set "ZIP=NAI-Factory-Hinchil-v%VER%-win-x64.zip"
 
 echo [1/6] Checking model file...
 if not exist models mkdir models
@@ -53,14 +57,14 @@ copy /y "%NODEEXE%" "dist\NAI-Factory-Hinchil\node.exe" >nul
 if errorlevel 1 goto fail
 
 echo [6/6] Making zip...
-tar -a -c -f dist\NAI-Factory-Hinchil-win-x64.zip -C dist NAI-Factory-Hinchil
+tar -a -c -f dist\%ZIP% -C dist NAI-Factory-Hinchil
 if errorlevel 1 (
-  powershell -NoProfile -Command "Compress-Archive -Path 'dist\NAI-Factory-Hinchil' -DestinationPath 'dist\NAI-Factory-Hinchil-win-x64.zip' -Force"
+  powershell -NoProfile -Command "Compress-Archive -Path 'dist\NAI-Factory-Hinchil' -DestinationPath 'dist\%ZIP%' -Force"
   if errorlevel 1 goto fail
 )
 
 echo.
-echo DONE: dist\NAI-Factory-Hinchil-win-x64.zip
+echo DONE: dist\%ZIP%
 echo Test it: unzip somewhere else and double-click start-gui.bat
 pause
 exit /b 0

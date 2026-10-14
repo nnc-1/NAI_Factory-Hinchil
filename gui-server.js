@@ -562,7 +562,8 @@ function listen(port) {
   });
   server.listen(port, '127.0.0.1', () => {
     const url = `http://127.0.0.1:${port}/`;
-    console.log(`NAI Factory · Hinchil: ${url}`);
+    let ver = ''; try { ver = ' v' + require('./package.json').version; } catch (e) { /* 없어도 괜찮아요 */ }
+    console.log(`NAI Factory · Hinchil${ver}: ${url}`);
     console.log('브라우저 창을 닫으면 이 창도 자동으로 꺼져요. 이 창을 끄면 작동하지 않아요.');
     console.log('Made by 크랙 크리에이터 넉넉한 취향 (https://share.crack.wrtn.ai/4dihl6) 의 클로드 어시스턴트 서한결 제작');
     openUrl(url);
