@@ -1,0 +1,5 @@
+models/censor_detect_v1.0_s.onnx
+  Source : https://huggingface.co/deepghs/anime_censor_detection  (censor_detect_v1.0_s)
+  License: MIT (as stated on the model page)
+  Copyright notice: see the source page above.
+This file is included to credit the model's origin, as the MIT License asks.
