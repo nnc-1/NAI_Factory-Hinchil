@@ -137,5 +137,33 @@
     return out;
   }
 
-  return { NUDENET_LABELS, ANIME_LABELS, LABELS, decode, iou, nms, selectParts, padBox, shapeOf, fadeStops };
+  // 브러시 획 정리: [{w: 굵기(px), p: [x1,y1,x2,y2,...]}]. 서버 저장/적용과 화면이 같은 규칙을 씀
+  // 숫자가 아닌 값, 너무 긴 획은 걸러내고 좌표는 소수 첫째 자리까지만 둠
+  const STROKE_MAX = 400, STROKE_PTS_MAX = 3000;
+  function cleanStrokes(list, W, H) {
+    const out = [];
+    if (!Array.isArray(list)) return out;
+    const r1 = (v) => Math.round(v * 10) / 10;
+    for (const s of list.slice(0, STROKE_MAX)) {
+      if (!s || !Array.isArray(s.p)) continue;
+      const w = Number(s.w);
+      if (!(w >= 1)) continue;
+      const p = [];
+      for (let i = 0; i + 1 < s.p.length && p.length < STROKE_PTS_MAX * 2; i += 2) {
+        const x = Number(s.p[i]), y = Number(s.p[i + 1]);
+        if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
+        if (W && H) p.push(r1(Math.max(-w, Math.min(W + w, x))), r1(Math.max(-w, Math.min(H + w, y))));
+        else p.push(r1(x), r1(y));
+      }
+      if (p.length >= 2) out.push({ w: r1(Math.min(w, W && H ? Math.max(W, H) : 100000)), p });
+    }
+    return out;
+  }
+  // 획 번짐 크기(px): 그림 짧은 변의 1% x brushSoft(0~1). 화면(canvas blur)과 서버(sharp blur)가 같은 값을 씀
+  function strokeBlur(soft, W, H) {
+    const v = Number(soft) * Math.min(W, H) * 0.01;
+    return v >= 0.3 ? v : 0;
+  }
+
+  return { NUDENET_LABELS, ANIME_LABELS, LABELS, decode, iou, nms, selectParts, padBox, shapeOf, fadeStops, cleanStrokes, strokeBlur };
 });

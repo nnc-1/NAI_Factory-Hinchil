@@ -37,6 +37,7 @@ const DEFAULT_CONFIG = {
   skipReviewed: true,             // true면 GUI에서 '검수 완료'로 체크한 그림은 폴더 전체 실행에서 건너뜀
   keepMetadata: false,            // true면 원본 PNG의 프롬프트 등 텍스트 메타데이터를 결과에 그대로 옮김 (PNG만)
   feather: 0.3,                   // 가장자리 번짐 정도 (0=칼같이, 1=아주 넓게 흐림). 원형일 때만 적용
+  brushSoft: 0.3,                 // 브러시/지우개 가장자리 번짐 (0=칼같이, 1=넓게). GUI의 브러시 편집에서만 씀
   threshold: 0.25,                // 감지 임계값. 낮을수록 더 많이 잡음 (놓침 줄고 오탐 늘어남)
   nmsIou: 0.45,                   // 겹치는 박스 정리 기준
   detectors: ['anime'],           // 쓸 감지기
@@ -70,6 +71,7 @@ function validateConfig(cfg) {
   if (typeof cfg.outInside !== 'boolean') throw new Error('outInside는 true 또는 false');
   if (typeof cfg.skipReviewed !== 'boolean') throw new Error('skipReviewed는 true 또는 false');
   if (typeof cfg.keepMetadata !== 'boolean') throw new Error('keepMetadata는 true 또는 false');
+  if (cfg.brushSoft !== undefined && !(cfg.brushSoft >= 0 && cfg.brushSoft <= 1)) throw new Error(`brushSoft는 0~1 사이: ${cfg.brushSoft}`);
   if (!(cfg.feather >= 0 && cfg.feather <= 2)) throw new Error(`feather는 0~2 사이: ${cfg.feather}`);
   if (!(cfg.padding >= -0.5 && cfg.padding <= 3)) throw new Error(`padding은 -0.5~3 사이: ${cfg.padding}`);
   if (!(cfg.mosaicSize >= 2 && cfg.mosaicSize <= 500)) throw new Error(`mosaicSize는 2~500: ${cfg.mosaicSize}`);
@@ -320,7 +322,7 @@ function encode(pipeline, outPath, cfg) {
 
 const r2 = (v) => Math.round(v * 100) / 100;
 
-async function censor(raw, boxes, cfg, outPath) {
+async function censor(raw, boxes, cfg, outPath, extra = {}) {
   const sharp = require('sharp');
   const rawOpt = { raw: { width: raw.width, height: raw.height, channels: raw.channels } };
   const shapes = boxes.map((b) => shapeOf(b, cfg, raw.width, raw.height));
@@ -370,9 +372,46 @@ async function censor(raw, boxes, cfg, outPath) {
       overlays.push({ input: big, left: r.left, top: r.top });
     }
   }
+  // 브러시로 칠한 곳(paint)과 금지구역(keep). 금지구역은 마지막에 원본을 되돌려 놓아서 항상 이김
+  const paint = core.cleanStrokes(extra.paint, raw.width, raw.height);
+  const keep = core.cleanStrokes(extra.keep, raw.width, raw.height);
+  const sigma = core.strokeBlur(cfg.brushSoft === undefined ? 0.3 : cfg.brushSoft, raw.width, raw.height);
+  const strokeMask = async (list) => {
+    // 좌표쌍을 "M x y L x y L ..." 로 이어 붙임
+    const paths = list.map((st) => {
+      if (st.p.length === 2) return `<circle cx="${st.p[0]}" cy="${st.p[1]}" r="${r2(st.w / 2)}" fill="#fff"/>`;
+      let d = `M${st.p[0]} ${st.p[1]}`;
+      for (let i = 2; i < st.p.length; i += 2) d += `L${st.p[i]} ${st.p[i + 1]}`;
+      return `<path d="${d}" fill="none" stroke="#fff" stroke-width="${st.w}" stroke-linecap="round" stroke-linejoin="round"/>`;
+    }).join('');
+    let m = sharp(Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="${raw.width}" height="${raw.height}">${paths}</svg>`)).ensureAlpha();
+    if (sigma > 0) m = m.blur(sigma);
+    return m.png().toBuffer();
+  };
+  if (paint.length) {
+    const mask = await strokeMask(paint);
+    let fill;
+    if (cfg.mode === 'white') {
+      fill = await sharp({ create: { width: raw.width, height: raw.height, channels: 4, background: cfg.fillColor } }).png().toBuffer();
+    } else {
+      const tw = Math.max(1, Math.round(raw.width / cfg.mosaicSize));
+      const th = Math.max(1, Math.round(raw.height / cfg.mosaicSize));
+      const tile = await sharp(raw.data, rawOpt).resize(tw, th, { kernel: 'linear' }).raw().toBuffer({ resolveWithObject: true });
+      fill = await sharp(tile.data, { raw: { width: tile.info.width, height: tile.info.height, channels: tile.info.channels } })
+        .resize(raw.width, raw.height, { kernel: 'nearest' }).png().toBuffer();
+    }
+    overlays.push({ input: await sharp(fill).ensureAlpha().composite([{ input: mask, blend: 'dest-in' }]).png().toBuffer(), left: 0, top: 0 });
+  }
   fs.mkdirSync(path.dirname(outPath), { recursive: true });
   let p = sharp(raw.data, rawOpt);
   if (overlays.length) p = p.composite(overlays).removeAlpha();
+  if (keep.length) {
+    const censored = await p.raw().toBuffer({ resolveWithObject: true });
+    const kmask = await strokeMask(keep);
+    const back = await sharp(raw.data, rawOpt).ensureAlpha().composite([{ input: kmask, blend: 'dest-in' }]).png().toBuffer();
+    p = sharp(censored.data, { raw: { width: censored.info.width, height: censored.info.height, channels: censored.info.channels } })
+      .composite([{ input: back, left: 0, top: 0 }]).removeAlpha();
+  }
   const isPng = path.extname(outPath).toLowerCase() === '.png';
   if (cfg.keepMetadata && isPng && raw.src && path.extname(raw.src).toLowerCase() === '.png') {
     const buf = await encode(p, outPath, cfg).toBuffer();

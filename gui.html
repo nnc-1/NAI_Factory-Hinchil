@@ -66,6 +66,10 @@
   #stage canvas { display: block; }
   #ov { position: absolute; left: 0; top: 0; }
   #empty { color: var(--dim); text-align: center; line-height: 1.8; }
+  #toolbar { display: flex; gap: 10px; align-items: center; padding: 8px 14px; border-top: 1px solid var(--line); flex-wrap: wrap; }
+  #toolbar .sz { display: flex; gap: 6px; align-items: center; color: var(--dim); font-size: 12px; }
+  #toolbar .sz input { width: 110px; }
+  #brushCur { position: fixed; z-index: 5; pointer-events: none; border-radius: 50%; display: none; transform: translate(-50%, -50%); }
   #info { padding: 8px 14px; border-top: 1px solid var(--line); color: var(--dim); font-size: 12px; min-height: 36px; }
 
   #list { grid-area: list; background: var(--panel); border-left: 1px solid var(--line); overflow-y: auto; padding: 8px; }
@@ -136,6 +140,9 @@
   <div class="row" style="margin-top:10px"><label>가장자리 번짐</label><span class="val" id="featV"></span></div>
   <input type="range" id="feather" min="0" max="1" step="0.05">
   <div class="hint">0이면 칼같이 잘리고, 올릴수록 바깥으로 부드럽게 흐려져요. 가운데 꽉 찬 부분은 그대로 두고 바깥에 흐린 띠가 더 붙어요. 원형일 때만 적용돼요.</div>
+  <div class="row" style="margin-top:10px"><label>브러시 가장자리 번짐</label><span class="val" id="bsV"></span></div>
+  <input type="range" id="brushSoft" min="0" max="1" step="0.05">
+  <div class="hint">박스 편집의 브러시·지우개로 칠한 곳의 가장자리예요. 0이면 칼같이, 올릴수록 부드럽게 이어져요.</div>
 
   <h2>가릴 부위</h2>
   <div id="partsMain"></div>
@@ -169,7 +176,14 @@
   </div>
   <div id="stage-wrap">
     <div id="empty">오른쪽 목록에서 그림을 골라 보세요.<br>슬라이더를 움직이면 결과가 바로 바뀌어요.</div>
+    <div id="brushCur"></div>
     <div id="stage" style="display:none"><canvas id="cv"></canvas><canvas id="ov"></canvas></div>
+  </div>
+  <div id="toolbar" style="display:none">
+    <div class="seg" id="toolSeg"><button data-t="box" class="on" title="빈 곳을 끌면 가릴 박스 추가, 박스를 클릭하면 제외/복구">박스</button><button data-t="paint" title="끌어서 가릴 곳을 칠해요">브러시</button><button data-t="keep" title="끌어서 칠한 곳은 어떤 경우에도 가리지 않아요 (흰칠 금지구역)">지우개(금지구역)</button></div>
+    <label class="sz">굵기 <input type="range" id="brushSize" min="1" max="20" step="0.5" value="4"><span id="bszV"></span></label>
+    <button id="undoStroke" disabled title="마지막 브러시/지우개 획을 취소해요 (Ctrl+Z)">획 취소</button>
+    <span class="hint" id="toolHint"></span>
   </div>
   <div id="info">-</div>
 </section>
@@ -232,6 +246,7 @@ const S = {
   files: [], filtered: [], cur: null,
   img: null, W: 0, H: 0, dets: [],
   excluded: new Set(), manual: [],
+  paint: [], keep: [], hist: [], tool: 'box', stroke: null,
   scale: 1, drag: null, loadSeq: 0,
 };
 
@@ -270,7 +285,7 @@ function params() {
     recursive: $('recursive').checked, mode: S.mode, shape: S.shape, fillColor: $('fillColor').value,
     detectors: [...document.querySelectorAll('[data-det]')].filter((c) => c.checked).map((c) => c.dataset.det),
     mosaicSize: Number($('mosaicSize').value), padding: Number($('padding').value), feather: Number($('feather').value),
-    threshold: Number($('threshold').value),
+    threshold: Number($('threshold').value), brushSoft: Number($('brushSoft').value),
     parts: [...document.querySelectorAll('[data-part]')].filter((c) => c.checked).map((c) => c.dataset.part),
     skipExisting: $('skipExisting').checked, skipReviewed: $('skipReviewed').checked, keepMetadata: $('keepMeta').checked, outInside: $('outInside').checked,
   };
@@ -293,11 +308,13 @@ function syncLabels() {
   $('featV').textContent = Math.round(Number($('feather').value) * 100) + '%';
   { const v = Math.round(Number($('padding').value) * 100); $('padV').textContent = (v > 0 ? '+' : '') + v + '%'; }
   $('mosV').textContent = $('mosaicSize').value + 'px';
+  $('bsV').textContent = Math.round(Number($('brushSoft').value) * 100) + '%';
 }
 function applyCfg(cfg, inputAbs, outputAbs) {
   $('inDir').value = inputAbs; $('outDir').value = outputAbs;
   $('recursive').checked = !!cfg.recursive; $('skipExisting').checked = !!cfg.skipExisting; $('skipReviewed').checked = cfg.skipReviewed !== false; $('keepMeta').checked = !!cfg.keepMetadata;
   $('fillColor').value = cfg.fillColor; $('mosaicSize').value = cfg.mosaicSize;
+  $('brushSoft').value = cfg.brushSoft == null ? 0.3 : cfg.brushSoft;
   $('padding').value = cfg.padding; $('feather').value = cfg.feather == null ? 0.3 : cfg.feather; $('threshold').value = cfg.threshold;
   document.querySelectorAll('[data-part]').forEach((c) => (c.checked = cfg.parts.includes(c.dataset.part)));
   document.querySelectorAll('[data-det]').forEach((c) => (c.checked = (cfg.detectors || ['anime']).includes(c.dataset.det)));
@@ -382,7 +399,7 @@ async function openImage(rel) {
     S.img = img; S.W = det.width; S.H = det.height; S.dets = det.detections;
     applyReviewEdits(rel);
     $('stage').style.display = ''; $('empty').style.display = 'none';
-    $('saveOne').disabled = false; $('resetEdit').disabled = !(S.excluded.size || S.manual.length);
+    $('saveOne').disabled = false; $('resetEdit').disabled = !(S.excluded.size || S.manual.length || S.paint.length || S.keep.length);
     fit(); render();
   } catch (e) {
     if (seq !== S.loadSeq) return;
@@ -423,6 +440,66 @@ function softEllipseFill(ctx, sh, color) {
   ctx.beginPath(); ctx.arc(0, 0, 1, 0, Math.PI * 2); ctx.fill();
   ctx.restore();
 }
+// ---------- 브러시 / 금지구역 그리기 ----------
+function strokeLayer(list, blur) {
+  const c = document.createElement('canvas'); c.width = S.W; c.height = S.H;
+  const x = c.getContext('2d');
+  x.fillStyle = x.strokeStyle = '#fff'; x.lineCap = 'round'; x.lineJoin = 'round';
+  for (const st of list) {
+    if (st.p.length === 2) { x.beginPath(); x.arc(st.p[0], st.p[1], st.w / 2, 0, Math.PI * 2); x.fill(); continue; }
+    x.lineWidth = st.w; x.beginPath(); x.moveTo(st.p[0], st.p[1]);
+    for (let i = 2; i < st.p.length; i += 2) x.lineTo(st.p[i], st.p[i + 1]);
+    x.stroke();
+  }
+  if (!(blur > 0)) return c;
+  const o = document.createElement('canvas'); o.width = S.W; o.height = S.H;
+  const ox = o.getContext('2d'); ox.filter = `blur(${blur}px)`; ox.drawImage(c, 0, 0);
+  return o;
+}
+// 브러시로 칠한 곳을 가리고, 그 위에 금지구역은 원본을 되돌려 놓아요 (금지구역이 항상 이겨요)
+function drawStrokes(ctx, p) {
+  const blur = Core.strokeBlur(p.brushSoft, S.W, S.H);
+  if (S.paint.length) {
+    const mask = strokeLayer(S.paint, blur);
+    const f = document.createElement('canvas'); f.width = S.W; f.height = S.H;
+    const fc = f.getContext('2d');
+    if (p.mode === 'white') { fc.fillStyle = p.fillColor; fc.fillRect(0, 0, S.W, S.H); }
+    else {
+      const tw = Math.max(1, Math.round(S.W / p.mosaicSize)), th = Math.max(1, Math.round(S.H / p.mosaicSize));
+      const t = document.createElement('canvas'); t.width = tw; t.height = th;
+      const tc = t.getContext('2d'); tc.imageSmoothingEnabled = true; tc.drawImage(S.img, 0, 0, tw, th);
+      fc.imageSmoothingEnabled = false; fc.drawImage(t, 0, 0, tw, th, 0, 0, S.W, S.H);
+    }
+    fc.globalCompositeOperation = 'destination-in'; fc.drawImage(mask, 0, 0);
+    ctx.drawImage(f, 0, 0);
+  }
+  if (S.keep.length) {
+    const mask = strokeLayer(S.keep, blur);
+    const o = document.createElement('canvas'); o.width = S.W; o.height = S.H;
+    const oc2 = o.getContext('2d'); oc2.drawImage(S.img, 0, 0, S.W, S.H);
+    oc2.globalCompositeOperation = 'destination-in'; oc2.drawImage(mask, 0, 0);
+    ctx.drawImage(o, 0, 0);
+  }
+}
+function tintStrokes(oc, list, color) {
+  oc.save(); oc.strokeStyle = oc.fillStyle = color; oc.lineCap = 'round'; oc.lineJoin = 'round';
+  for (const st of list) {
+    if (st.p.length === 2) { oc.beginPath(); oc.arc(st.p[0], st.p[1], st.w / 2, 0, Math.PI * 2); oc.fill(); continue; }
+    oc.lineWidth = st.w; oc.beginPath(); oc.moveTo(st.p[0], st.p[1]);
+    for (let i = 2; i < st.p.length; i += 2) oc.lineTo(st.p[i], st.p[i + 1]);
+    oc.stroke();
+  }
+  oc.restore();
+}
+const STROKE_COLOR = { paint: 'rgba(80,160,255,.4)', keep: 'rgba(70,220,130,.4)' };
+function brushW() { return Math.max(1, Number($('brushSize').value) / 100 * Math.min(S.W, S.H)); }
+function undoStroke() {
+  const t = S.hist.pop();
+  if (!t) return;
+  (t === 'paint' ? S.paint : S.keep).pop();
+  render();
+}
+function clearStrokes() { S.paint = []; S.keep = []; S.hist = []; }
 function drawCensor(ctx, p, boxes) {
   for (const b of boxes) {
     const sh = Core.shapeOf(b, p, S.W, S.H);
@@ -461,12 +538,13 @@ function render() {
   const ctx = $('cv').getContext('2d');
   ctx.clearRect(0, 0, S.W, S.H);
   ctx.drawImage(S.img, 0, 0, S.W, S.H);
-  if (S.view !== 'orig') drawCensor(ctx, p, all);
+  if (S.view !== 'orig') { drawCensor(ctx, p, all); drawStrokes(ctx, p); }
 
   const ov = $('ov'), oc = ov.getContext('2d');
   oc.clearRect(0, 0, S.W, S.H);
   ov.style.pointerEvents = S.view === 'boxes' ? 'auto' : 'none';
-  ov.style.cursor = S.view === 'boxes' ? 'crosshair' : 'default';
+  ov.style.cursor = S.view === 'boxes' ? (S.tool === 'box' ? 'crosshair' : 'none') : 'default';
+  $('toolbar').style.display = S.view === 'boxes' ? '' : 'none';
   if (S.view === 'boxes') {
     const lw = Math.max(2, 2 / S.scale), fs = Math.max(11, 13 / S.scale);
     oc.font = `${fs}px sans-serif`; oc.textBaseline = 'top';
@@ -491,20 +569,22 @@ function render() {
     oc.setLineDash([]);
     oc.strokeStyle = '#5aa0ff'; oc.lineWidth = lw;
     for (const m of S.manual) oc.strokeRect(m.x1, m.y1, m.x2 - m.x1, m.y2 - m.y1);
+    tintStrokes(oc, S.keep, STROKE_COLOR.keep);
     if (S.drag && S.drag.moved) {
       oc.strokeStyle = '#5aa0ff'; oc.setLineDash([lw * 3, lw * 2]);
       oc.strokeRect(Math.min(S.drag.x0, S.drag.x1), Math.min(S.drag.y0, S.drag.y1), Math.abs(S.drag.x1 - S.drag.x0), Math.abs(S.drag.y1 - S.drag.y0));
       oc.setLineDash([]);
     }
   }
-  const edits = S.excluded.size + S.manual.length;
+  const edits = S.excluded.size + S.manual.length + S.paint.length + S.keep.length;
   $('resetEdit').disabled = edits === 0;
+  $('undoStroke').disabled = S.hist.length === 0;
   const miss = S.dets.filter((d) => d.score >= p.threshold && p.parts.includes(d.label)).length;
   const exCnt = picked.filter((d) => S.excluded.has(d.id)).length;
   $('info').textContent =
     `${S.W}×${S.H} · 자동 감지 ${picked.length}곳` + (exCnt ? ` (제외 ${exCnt})` : '') +
-    (S.manual.length ? ` · 직접 추가 ${S.manual.length}곳` : '') +
-    (S.view === 'boxes' ? ' · 박스를 클릭하면 제외/복구, 빈 곳을 끌면 가릴 영역 추가(파란 박스 클릭하면 삭제)' : '');
+    (S.manual.length ? ` · 직접 추가 ${S.manual.length}곳` : '') + (S.paint.length ? ` · 브러시 ${S.paint.length}획` : '') + (S.keep.length ? ` · 금지구역 ${S.keep.length}획` : '') +
+    (S.view === 'boxes' ? (S.tool === 'box' ? ' · 박스를 클릭하면 제외/복구, 빈 곳을 끌면 가릴 영역 추가(파란 박스 클릭하면 삭제)' : S.tool === 'paint' ? ' · 끌어서 가릴 곳을 칠해요 (Ctrl+Z로 한 획씩 취소)' : ' · 끌어서 칠한 곳(초록)은 어떤 경우에도 가리지 않아요 (Ctrl+Z로 한 획씩 취소)') : '');
   if (!picked.length && S.view === 'result') $('info').textContent += ' · 가릴 곳을 못 찾았어요 (민감도를 내려 보세요)';
 }
 
@@ -515,15 +595,38 @@ function toImg(e) {
 }
 $('ov').addEventListener('mousedown', (e) => {
   if (e.button !== 0) return;
-  const [x, y] = toImg(e); S.drag = { x0: x, y0: y, x1: x, y1: y, moved: false };
+  const [x, y] = toImg(e);
+  if (S.tool !== 'box') { S.stroke = { t: S.tool, w: brushW(), p: [x, y] }; tintStrokes($('ov').getContext('2d'), [{ w: S.stroke.w, p: [x, y] }], STROKE_COLOR[S.tool]); return; }
+  S.drag = { x0: x, y0: y, x1: x, y1: y, moved: false };
 });
+$('ov').addEventListener('mousemove', (e) => {
+  const c = $('brushCur');
+  if (S.tool === 'box' || S.view !== 'boxes') { c.style.display = 'none'; return; }
+  const d = brushW() * S.scale;
+  c.style.cssText = `display:block;left:${e.clientX}px;top:${e.clientY}px;width:${d}px;height:${d}px;border:1.5px solid ${S.tool === 'keep' ? '#46dc82' : '#50a0ff'};box-shadow:0 0 0 1px #0007`;
+});
+$('ov').addEventListener('mouseleave', () => { $('brushCur').style.display = 'none'; });
 window.addEventListener('mousemove', (e) => {
+  if (S.stroke) {
+    const [x, y] = toImg(e), st = S.stroke, n = st.p.length;
+    if (Math.hypot(x - st.p[n - 2], y - st.p[n - 1]) < Math.max(1.5, st.w * 0.08)) return;
+    tintStrokes($('ov').getContext('2d'), [{ w: st.w, p: [st.p[n - 2], st.p[n - 1], x, y] }], STROKE_COLOR[st.t]);
+    st.p.push(x, y);
+    return;
+  }
   if (!S.drag) return;
   const [x, y] = toImg(e); S.drag.x1 = x; S.drag.y1 = y;
   if (Math.hypot(x - S.drag.x0, y - S.drag.y0) * S.scale > 6) S.drag.moved = true;
   render();
 });
 window.addEventListener('mouseup', () => {
+  if (S.stroke) {
+    const st = S.stroke; S.stroke = null;
+    const clean = Core.cleanStrokes([{ w: st.w, p: st.p }], S.W, S.H);
+    if (clean.length) { (st.t === 'paint' ? S.paint : S.keep).push(clean[0]); S.hist.push(st.t); }
+    render();
+    return;
+  }
   const d = S.drag; if (!d) return; S.drag = null;
   if (d.moved) {
     const x1 = Math.max(0, Math.min(d.x0, d.x1)), y1 = Math.max(0, Math.min(d.y0, d.y1));
@@ -541,7 +644,21 @@ window.addEventListener('mouseup', () => {
   }
   render();
 });
-$('resetEdit').onclick = () => { S.excluded = new Set(); S.manual = []; render(); };
+$('resetEdit').onclick = () => { S.excluded = new Set(); S.manual = []; clearStrokes(); render(); };
+document.querySelectorAll('#toolSeg button').forEach((b) => (b.onclick = () => {
+  S.tool = b.dataset.t;
+  document.querySelectorAll('#toolSeg button').forEach((x) => x.classList.toggle('on', x === b));
+  $('brushCur').style.display = 'none';
+  $('toolHint').textContent = S.tool === 'keep' ? '칠한 곳(초록)은 박스를 키우거나 옮겨도 계속 안 가려져요' : S.tool === 'paint' ? '감지가 놓친 곳을 직접 칠해요' : '';
+  render();
+}));
+$('undoStroke').onclick = undoStroke;
+$('brushSize').addEventListener('input', () => { $('bszV').textContent = $('brushSize').value + '%'; });
+$('bszV').textContent = $('brushSize').value + '%';
+window.addEventListener('keydown', (e) => {
+  if (e.target.tagName === 'INPUT' && e.target.type === 'text') return;
+  if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && e.code === 'KeyZ' && S.img && S.hist.length) { e.preventDefault(); undoStroke(); }
+});
 
 document.querySelectorAll('#viewSeg button').forEach((b) => (b.onclick = () => {
   S.view = b.dataset.v;
@@ -559,7 +676,7 @@ document.querySelectorAll('[data-det]').forEach((c) => c.addEventListener('chang
   if (S.cur) openImage(S.cur);
 }));
 $('toast').onclick = () => { $('toast').style.display = 'none'; };
-['threshold', 'padding', 'feather', 'mosaicSize', 'fillColor'].forEach((id) => $(id).addEventListener('input', render));
+['threshold', 'padding', 'feather', 'brushSoft', 'mosaicSize', 'fillColor'].forEach((id) => $(id).addEventListener('input', render));
 $('threshold').addEventListener('input', updateBadges);
 
 // 누르고 있는 동안 원본 보기 (스페이스바)
@@ -580,7 +697,7 @@ $('saveOne').onclick = async () => {
   const boxes = active.map((d) => ({ x1: d.x1, y1: d.y1, x2: d.x2, y2: d.y2, exact: false })).concat(S.manual);
   $('saveOne').disabled = true;
   try {
-    const j = await api('/api/save-one', { dir: p.inputDir, rel: S.cur, params: p, boxes });
+    const j = await api('/api/save-one', { dir: p.inputDir, rel: S.cur, params: p, boxes, paint: S.paint, keep: S.keep });
     toast('저장했어요: ' + j.out, 5000);
   } catch (e) { toast('저장 실패: ' + e.message, 6000); }
   $('saveOne').disabled = false;
@@ -604,7 +721,7 @@ $('resetAll').onclick = async () => {
 };
 // 흰칠 옵션(방식, 모양, 민감도, 부위 등)은 바꾸는 즉시 이 브라우저에 저장해요. 폴더는 서버가 따로 기억해요
 const OPT_KEY = 'hinchil.censor.v1';
-const OPT_KEYS = ['recursive', 'mode', 'shape', 'fillColor', 'mosaicSize', 'padding', 'feather', 'threshold', 'detectors', 'parts', 'skipExisting', 'skipReviewed', 'keepMetadata'];
+const OPT_KEYS = ['recursive', 'mode', 'shape', 'fillColor', 'mosaicSize', 'padding', 'feather', 'brushSoft', 'threshold', 'detectors', 'parts', 'skipExisting', 'skipReviewed', 'keepMetadata'];
 function saveOpts() {
   try { const p = params(), o = {}; for (const k of OPT_KEYS) o[k] = p[k]; localStorage.setItem(OPT_KEY, JSON.stringify(o)); } catch (e) { /* 저장 못 해도 괜찮음 */ }
 }
@@ -688,21 +805,23 @@ S.reviewEdits = {};
 // 저장해 둔 검수 편집(제외한 박스, 직접 그린 박스)을 지금 열린 그림에 되살림
 function applyReviewEdits(rel) {
   const e = S.reviewEdits[rel];
-  S.excluded = new Set(); S.manual = [];
+  S.excluded = new Set(); S.manual = []; clearStrokes();
   if (!e) return;
   for (const [label, x1, y1, x2, y2] of e.ex) {
     const d = S.dets.find((k) => k.label === label && Math.abs(k.x1 - x1) < 2 && Math.abs(k.y1 - y1) < 2 && Math.abs(k.x2 - x2) < 2 && Math.abs(k.y2 - y2) < 2);
     if (d) S.excluded.add(d.id);
   }
   S.manual = e.man.map((b) => ({ x1: b.x1, y1: b.y1, x2: b.x2, y2: b.y2, exact: true }));
+  S.paint = (e.paint || []).map((k) => ({ w: k.w, p: k.p.slice() })); S.keep = (e.keep || []).map((k) => ({ w: k.w, p: k.p.slice() }));
+  S.hist = S.paint.map(() => 'paint').concat(S.keep.map(() => 'keep'));
 }
 // 그림 하나를 지금 화면 설정으로 결과 폴더에 저장. 열려 있는 그림이면 화면에서 고친 박스 그대로, 아니면 자동 감지 결과로.
 // 돌려주는 값: 검수 편집 내용 {ex, man}
 async function saveFor(rel) {
   const p = params();
   if (!p.outputDir) throw new Error('결과 폴더를 먼저 골라 주세요');
-  let dets, excluded, manual;
-  if (rel === S.cur && S.img) { dets = S.dets; excluded = S.excluded; manual = S.manual; }
+  let dets, excluded, manual, paint = [], keep = [];
+  if (rel === S.cur && S.img) { dets = S.dets; excluded = S.excluded; manual = S.manual; paint = S.paint; keep = S.keep; }
   else {
     const det = await api(`/api/detect?dir=${encodeURIComponent(p.inputDir)}&rel=${encodeURIComponent(rel)}&det=${encodeURIComponent(p.detectors.join(','))}`);
     dets = det.detections; excluded = new Set(); manual = [];
@@ -713,13 +832,14 @@ async function saveFor(rel) {
         if (d) excluded.add(d.id);
       }
       manual = e.man.map((b) => ({ x1: b.x1, y1: b.y1, x2: b.x2, y2: b.y2, exact: true }));
+      paint = e.paint || []; keep = e.keep || [];
     }
   }
   const picked = Core.selectParts(dets, { parts: p.parts, threshold: p.threshold, nmsIou: 0.45 });
   const active = picked.filter((d) => !excluded.has(d.id));
   const boxes = active.map((d) => ({ x1: d.x1, y1: d.y1, x2: d.x2, y2: d.y2, exact: false })).concat(manual);
-  const j = await api('/api/save-one', { dir: p.inputDir, rel, params: p, boxes });
-  return { out: j.out, ex: picked.filter((d) => excluded.has(d.id)).map((d) => [d.label, d.x1, d.y1, d.x2, d.y2]), man: manual.map((b) => ({ x1: b.x1, y1: b.y1, x2: b.x2, y2: b.y2 })) };
+  const j = await api('/api/save-one', { dir: p.inputDir, rel, params: p, boxes, paint, keep });
+  return { out: j.out, paint, keep, ex: picked.filter((d) => excluded.has(d.id)).map((d) => [d.label, d.x1, d.y1, d.x2, d.y2]), man: manual.map((b) => ({ x1: b.x1, y1: b.y1, x2: b.x2, y2: b.y2 })) };
 }
 // 검수 체크를 켜면: 그 그림을 (고친 박스 그대로) 결과 폴더에 저장하고, 고친 내용도 캐시에 남김. 끄면 표시와 저장해 둔 편집만 지움(이미 저장된 결과 파일은 그대로).
 async function toggleReview(rel, force) {
@@ -734,10 +854,10 @@ async function toggleReview(rel, force) {
     let edit = null, msg = '';
     if (on) {
       const r = await saveFor(rel);
-      edit = { ex: r.ex, man: r.man }; msg = '검수 완료, 결과 저장: ' + r.out;
+      edit = { ex: r.ex, man: r.man, paint: r.paint, keep: r.keep }; msg = '검수 완료, 결과 저장: ' + r.out;
     }
     await api('/api/review', { dir: params().inputDir, rel, on, edit });
-    if (on) { S.reviewed.add(rel); if (edit.ex.length || edit.man.length) S.reviewEdits[rel] = edit; else delete S.reviewEdits[rel]; toast(msg, 4000); }
+    if (on) { S.reviewed.add(rel); if (edit.ex.length || edit.man.length || edit.paint.length || edit.keep.length) S.reviewEdits[rel] = edit; else delete S.reviewEdits[rel]; toast(msg, 4000); }
     else { S.reviewed.delete(rel); delete S.reviewEdits[rel]; }
   } catch (e) { toast((on ? '검수 체크를 못 했어요: ' : '검수 표시를 못 지웠어요: ') + e.message, 6000); updateBadges(); syncReviewBtn(); return; }
   syncReviewBtn(); updateBadges();

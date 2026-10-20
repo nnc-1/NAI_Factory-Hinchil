@@ -277,7 +277,7 @@ function readBody(req) {
 function pickParams(p) {
   const base = H.readUserConfig();
   const cfg = { ...base };
-  for (const k of ['inputDir', 'outputDir', 'recursive', 'mode', 'shape', 'fillColor', 'mosaicSize', 'padding', 'feather', 'threshold', 'detectors', 'parts', 'skipExisting', 'skipReviewed', 'outInside', 'keepMetadata']) {
+  for (const k of ['inputDir', 'outputDir', 'recursive', 'mode', 'shape', 'fillColor', 'mosaicSize', 'padding', 'feather', 'brushSoft', 'threshold', 'detectors', 'parts', 'skipExisting', 'skipReviewed', 'outInside', 'keepMetadata']) {
     if (p && p[k] !== undefined) cfg[k] = p[k];
   }
   return H.validateConfig(cfg);
@@ -357,7 +357,7 @@ async function handle(req, res, port) {
     if (req.method === 'POST' && u.pathname === '/api/config') {
       const cfg = pickParams(await readBody(req));
       const keep = {};
-      for (const k of ['inputDir', 'outputDir', 'recursive', 'mode', 'shape', 'fillColor', 'mosaicSize', 'padding', 'feather', 'threshold', 'detectors', 'parts', 'skipExisting', 'skipReviewed', 'outInside', 'keepMetadata']) keep[k] = cfg[k];
+      for (const k of ['inputDir', 'outputDir', 'recursive', 'mode', 'shape', 'fillColor', 'mosaicSize', 'padding', 'feather', 'brushSoft', 'threshold', 'detectors', 'parts', 'skipExisting', 'skipReviewed', 'outInside', 'keepMetadata']) keep[k] = cfg[k];
       fs.writeFileSync(path.join(__dirname, 'config.json'), JSON.stringify(keep, null, 2) + '\n', 'utf8');
       return sendJson(res, 200, { ok: true });
     }
@@ -497,7 +497,7 @@ async function handle(req, res, port) {
       }));
       if (boxes.some((b) => ![b.x1, b.y1, b.x2, b.y2].every(Number.isFinite))) throw new Error('박스 좌표가 이상해요');
       const raw = await H.loadRaw(full);
-      await H.censor(raw, boxes, cfg, outPath);
+      await H.censor(raw, boxes, cfg, outPath, { paint: body.paint, keep: body.keep });
       return sendJson(res, 200, { out: outPath });
     }
 

@@ -7,6 +7,7 @@
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const Core = require('./core');
 
 const CACHE_DIR = path.join(__dirname, '캐시');
 const SCAN_THRESHOLD = 0.05; // 가장 낮은 민감도로 한 번만 감지해 저장. 민감도/부위는 화면에서 바로 걸러냄
@@ -248,20 +249,26 @@ module.exports = function createScanner({ H, ensure, isBusy }) {
     if (!edit || typeof edit !== 'object') return null;
     const ex = (Array.isArray(edit.ex) ? edit.ex : []).slice(0, 300).map((a) => [String(a[0] || ''), num(a[1]), num(a[2]), num(a[3]), num(a[4])]);
     const man = (Array.isArray(edit.man) ? edit.man : []).slice(0, 300).map((b) => ({ x1: num(b.x1), y1: num(b.y1), x2: num(b.x2), y2: num(b.y2) }));
-    return ex.length || man.length ? { ex, man } : null;
+    const paint = Core.cleanStrokes(edit.paint);
+    const keep = Core.cleanStrokes(edit.keep);
+    if (!(ex.length || man.length || paint.length || keep.length)) return null;
+    const out = { ex, man };
+    if (paint.length) out.paint = paint;
+    if (keep.length) out.keep = keep;
+    return out;
   }
   function setReviewed(dirAbs, rel, on, edit) {
     const store = getStore(dirAbs, true);
     if (on) {
       const e = cleanEdit(edit);
-      store.data.reviewed[rel] = e ? { t: Date.now(), ex: e.ex, man: e.man } : { t: Date.now() };
+      store.data.reviewed[rel] = e ? Object.assign({ t: Date.now() }, e) : { t: Date.now() };
     } else delete store.data.reviewed[rel];
     save(store);
   }
   function reviewedEdits(dirAbs) {
     const store = getStore(dirAbs, false);
     const out = {};
-    if (store) for (const [rel, v] of Object.entries(store.data.reviewed)) if (v && typeof v === 'object' && (v.ex || v.man)) out[rel] = { ex: v.ex || [], man: v.man || [] };
+    if (store) for (const [rel, v] of Object.entries(store.data.reviewed)) if (v && typeof v === 'object' && (v.ex || v.man || v.paint || v.keep)) out[rel] = { ex: v.ex || [], man: v.man || [], paint: v.paint || [], keep: v.keep || [] };
     return out;
   }
   function reviewedList(dirAbs) {
