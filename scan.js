@@ -280,8 +280,10 @@ module.exports = function createScanner({ H, ensure, isBusy }) {
   // 캐시만 비우기: 미리 스캔한 감지 결과만 지워요. 검수 표시, 고친 박스, 마지막에 쓴 폴더 기억, 설정은 그대로 둬요
   function clearCache() {
     try { stop(); } catch (e) { /* 실행 중이 아니면 무시 */ }
-    for (const st of stores.values()) if (st.timer) clearTimeout(st.timer);
-    stores.clear();
+    // 아직 파일에 안 쓴 검수 표시부터 저장하고, 메모리의 감지 결과는 저장소 객체째 비워요.
+    // (객체를 버리면, 돌던 감지가 끝나며 옛 결과 전체를 파일에 다시 써 버려요)
+    flushAll();
+    for (const st of stores.values()) st.data.files = {};
     let names = [];
     try { names = fs.readdirSync(CACHE_DIR).filter((n) => n.endsWith('.json') && n !== 'last-folders.json'); } catch (e) { return { folders: 0, entries: 0, bytes: 0 }; }
     let folders = 0, entries = 0, bytes = 0;
