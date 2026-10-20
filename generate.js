@@ -16,35 +16,48 @@ const UC_TEXT = [
   '',
 ];
 const UC_ID = ['heavy', 'light', 'human_focus', 'none'];
+// NovelAI 사이트는 Full 모델에서 프리셋 앞에 'nsfw'를 붙이고, 퍼리 포커스 프리셋도 있어요 (사이트에서 받은 그림의 메타데이터로 확인)
+const FURRY_UC = '{worst quality}, distracting watermark, unfinished, bad quality, {widescreen}, upscale, {sequence}, {{grandfathered content}}, blurred foreground, chromatic aberration, sketch, everyone, [sketch background], simple, [flat colors], ych (character), outline, multiple scenes, [[horror (theme)]], comic';
 
 // 품질 태그 / 네거티브 프리셋 글자는 생성할 때 이 프로그램이 알아서 붙여요.
 // 그림에서 가져온 프롬프트에 이미 들어 있으면 빼 줘야 다시 생성할수록 쌓이지 않아요.
-const QUALITY_VARIANTS = [
+const QUALITY_VARIANTS = [ // NovelAI 공식 문서(Quality Tags)에 적힌 모델별 문구
   QUALITY_TAGS,
+  'very aesthetic, amazing quality, no text',
   'location, very aesthetic, masterpiece, no text',
-  'very aesthetic, masterpiece, no text, -0.8::feet::, rating:general',
+  'location, masterpiece, no text, -0.8::feet::, rating:general',
+  'no text, best quality, very aesthetic, absurdres',
   'rating:general, amazing quality, very aesthetic, absurdres',
   'best quality, amazing quality, very aesthetic, absurdres',
 ];
 const splitTags = (t) => String(t || '').split(',').map((x) => x.trim()).filter(Boolean);
 // text 안에서 phrase(쉼표로 이어진 태그 묶음)가 통째로 이어져 있는 곳을 모두 지워요. 지운 횟수도 알려 줘요
-function stripPhrase(text, phrase) {
+function stripPhrase(text, phrase, eatNsfw) {
   const tags = splitTags(text), want = splitTags(phrase).map((x) => x.toLowerCase());
   if (!want.length) return { text: String(text || ''), n: 0 };
   const out = []; let n = 0;
   for (let i = 0; i < tags.length;) {
-    if (want.every((w, k) => tags[i + k] !== undefined && tags[i + k].toLowerCase() === w)) { i += want.length; n++; }
-    else out.push(tags[i++]);
+    if (want.every((w, k) => tags[i + k] !== undefined && tags[i + k].toLowerCase() === w)) {
+      i += want.length; n++;
+      if (eatNsfw && out.length === 1 && out[0].toLowerCase() === 'nsfw') out.length = 0; // 사이트가 프리셋 앞에 붙이는 nsfw
+    } else out.push(tags[i++]);
   }
   return n ? { text: out.join(', '), n } : { text: String(text || ''), n: 0 };
 }
-function stripPhrases(text, phrases) {
+function stripPhrases(text, phrases, eatNsfw) {
   let t = text, n = 0;
-  for (const ph of [...phrases].sort((x, y) => splitTags(y).length - splitTags(x).length)) { const r = stripPhrase(t, ph); t = r.text; n += r.n; }
+  for (const ph of [...phrases].sort((x, y) => splitTags(y).length - splitTags(x).length)) { const r = stripPhrase(t, ph, eatNsfw); t = r.text; n += r.n; }
   return { text: t, n };
 }
 const stripQuality = (t) => stripPhrases(t, QUALITY_VARIANTS);
-const stripUc = (t) => stripPhrases(t, UC_TEXT.filter(Boolean));
+const UC_STRIP = [...UC_TEXT.filter(Boolean), FURRY_UC];
+const stripUc = (t) => stripPhrases(t, UC_STRIP, true);
+// 네거티브에 어떤 프리셋이 들어 있었는지: 0 heavy / 1 light / 2 human focus / 4 퍼리 포커스 / 3 없음
+function detectUc(t) {
+  const list = [[0, UC_TEXT[0]], [1, UC_TEXT[1]], [2, UC_TEXT[2]], [4, FURRY_UC]].sort((a, b) => splitTags(b[1]).length - splitTags(a[1]).length);
+  for (const [i, ph] of list) if (stripPhrase(t, ph).n) return i;
+  return 3;
+}
 
 let uid = Date.now();
 const S = {
@@ -447,9 +460,12 @@ async function readImageTags(file) {
   const a = ap && (ap.prompt || ap.negative_prompt) ? pack(ap.prompt, ap.negative_prompt, o.base, o.neg) : o;
   const hasActual = JSON.stringify(a) !== JSON.stringify(o);
   // 품질 태그와 네거티브 프리셋 글자는 빼요 (생성할 때 자동으로 다시 붙으니까, 안 빼면 가져올 때마다 쌓여요)
+  // 사이트 그림에는 품질/프리셋 켬·끔 표시가 따로 없어서, 글자가 들어 있었는지로 알아내요
+  const hasPos = !!o.base, hasNeg = !!o.neg;
+  const qOn = stripQuality(o.base).n > 0, ucIdx = detectUc(o.neg);
   const clean = (v) => { const q = stripQuality(v.base), u = stripUc(v.neg); v.base = q.text; v.neg = u.text; return q.n + u.n; };
   const removed = Math.max(clean(o), hasActual ? clean(a) : 0); if (!hasActual) { a.base = o.base; a.neg = o.neg; }
-  return { orig: o, act: a, hasActual, seed: meta.seed, meta, removed };
+  return { orig: o, act: a, hasActual, seed: meta.seed, meta, removed, hasPos, hasNeg, qOn, ucIdx };
 }
 
 // 그림 메타데이터를 NovelAI처럼 고른 항목만 그대로 가져와요 (태그를 걸러내거나 고치지 않아요)
@@ -462,8 +478,8 @@ function openTagDialog(file, info) {
   const samplerOk = m.sampler && [...$('sampler').options].some((o) => o.value === m.sampler);
   const hasSettings = m.steps !== undefined || m.scale !== undefined || m.cfg_rescale !== undefined || samplerOk || sizeOk || m.ucPreset !== undefined;
   const items = [
-    ['prompt', '메인 프롬프트 (작가 태그 칸으로)', !!info.orig.base],
-    ['neg', '네거티브 (공통 네거티브로)', !!info.orig.neg],
+    ['prompt', '메인 프롬프트 (작가 태그 칸으로)', info.hasPos],
+    ['neg', '네거티브 (공통 네거티브로)', info.hasNeg],
     ['chars', '캐릭터 프롬프트 (외형·네거티브)', info.orig.chars.length > 0 || info.act.chars.length > 0],
     ['settings', '설정 (스텝·가이던스·샘플러·크기 등)', hasSettings],
     ['seed', '시드', info.seed !== undefined],
@@ -485,13 +501,18 @@ function openTagDialog(file, info) {
   go.addEventListener('click', () => {
     const did = [];
     const v = cbs.actual.checked ? info.act : info.orig;
-    if (cbs.prompt.checked && v.base) { S.artist = v.base; $('artist').value = S.artist; did.push('작가 태그 칸'); }
+    if (cbs.prompt.checked) {
+      S.artist = v.base; $('artist').value = S.artist; did.push('작가 태그 칸');
+      S.quality = info.qOn; $('quality').checked = S.quality; did.push(`품질 태그 ${S.quality ? '켬' : '끔'}`);
+    }
     if (cbs.chars.checked && v.chars.length) {
       const seed = cbs.seed.checked && info.seed !== undefined ? String(info.seed) : '';
       v.chars.forEach((c, i) => S.chars.push({ ...newChar(i ? `${stem} ${i + 1}` : stem), main: '', look: c.look, neg: c.neg, seed }));
       renderChars(); did.push(`캐릭터 카드 ${v.chars.length}개 추가`);
     } else if (cbs.seed.checked) toast('시드는 새 캐릭터 카드에 들어가요. 캐릭터 프롬프트도 같이 골라 주세요', 5000);
-    if (cbs.neg.checked && v.neg) { S.negCommon = v.neg; $('negCommon').value = S.negCommon; did.push('공통 네거티브'); }
+    if (cbs.neg.checked) {
+      S.negCommon = v.neg; $('negCommon').value = S.negCommon; did.push('공통 네거티브');
+    }
     if (cbs.settings.checked) {
       const set = (id, key, v) => { S[key] = v; $(id).value = v; };
       if (m.steps !== undefined) set('steps', 'steps', Number(m.steps));
@@ -501,6 +522,10 @@ function openTagDialog(file, info) {
       if (sizeOk) set('size', 'size', sizeKey);
       if (m.ucPreset !== undefined && [0, 1, 2, 3].includes(Number(m.ucPreset))) set('uc', 'uc', Number(m.ucPreset));
       did.push('설정');
+    }
+    if (cbs.neg.checked) {
+      if (info.ucIdx <= 3) { S.uc = info.ucIdx; $('uc').value = String(S.uc); did.push(`네거티브 프리셋 ${$('uc').selectedOptions[0]?.textContent || ''}`.trim()); }
+      else toast('이 그림은 퍼리 포커스 프리셋이에요. 팩토리에는 없어서 프리셋 글자만 빼고 가져왔어요', 6000);
     }
     save(); dlg.classList.remove('on');
     toast(did.length ? `가져왔어요: ${did.join(', ')}${info.removed ? '\n(품질 태그·네거티브 프리셋 글자는 생성할 때 자동으로 붙어서 뺐어요)' : ''}` : '가져올 항목을 골라 주세요', info.removed ? 5000 : 3500);
