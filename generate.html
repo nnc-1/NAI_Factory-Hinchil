@@ -153,7 +153,8 @@
     <div style="grid-column:1/-1"><label class="lab" for="uc">네거티브 프리셋</label>
       <select id="uc"><option value="0">Heavy (기본)</option><option value="1">Light</option><option value="2">Human Focus</option><option value="3">None</option><option value="4">Furry Focus</option></select></div>
   </div>
-  <label class="chk"><input type="checkbox" id="quality"><span>품질 태그 추가 <span class="hint">(very aesthetic, masterpiece, no text)</span></span></label>
+  <label class="chk"><input type="checkbox" id="quality"><span>품질 태그 추가 <span class="hint" id="qualityHint">(very aesthetic, masterpiece, no text)</span></span></label>
+  <select id="qualityKind" style="display:none;margin:2px 0 6px 24px"><option value="0">Standard</option><option value="1">Light</option></select>
   <label class="chk"><input type="checkbox" id="variety"><span>Variety+ <span class="hint" id="varietyHint">(다양성 증가)</span></span></label>
 
   <h2>생성 순서와 간격</h2>

@@ -9,6 +9,7 @@ const MAX_SEED = 4294967295;
 const RETRY_MS = 5000;
 const MAX_FAILS = 3;
 const QUALITY_TAGS = 'very aesthetic, masterpiece, no text';
+const QUALITY_LIGHT = 'very aesthetic, amazing quality, no text'; // V5에만 있는 Light 품질 태그
 // NovelAI 사이트는 Full 모델에서 프리셋 앞에 'nsfw'를 붙이고, 퍼리 포커스 프리셋도 있어요 (사이트에서 받은 그림의 메타데이터로 확인)
 const FURRY_UC = '{worst quality}, distracting watermark, unfinished, bad quality, {widescreen}, upscale, {sequence}, {{grandfathered content}}, blurred foreground, chromatic aberration, sketch, everyone, [sketch background], simple, [flat colors], ych (character), outline, multiple scenes, [[horror (theme)]], comic';
 // V5의 Light 프리셋은 V4.5와 문구가 달라요 (NovelAI 공식 문서 Undesired Content). Heavy, Human Focus, Furry Focus는 같아요
@@ -26,7 +27,7 @@ const UC_ID = ['heavy', 'light', 'human_focus', 'none', 'none']; // 퍼리 포�
 // 그림에서 가져온 프롬프트에 이미 들어 있으면 빼 줘야 다시 생성할수록 쌓이지 않아요.
 const QUALITY_VARIANTS = [ // NovelAI 공식 문서(Quality Tags)에 적힌 모델별 문구
   QUALITY_TAGS,
-  'very aesthetic, amazing quality, no text',
+  QUALITY_LIGHT,
   'location, very aesthetic, masterpiece, no text',
   'location, masterpiece, no text, -0.8::feet::, rating:general',
   'no text, best quality, very aesthetic, absurdres',
@@ -66,7 +67,7 @@ let uid = Date.now();
 const S = {
   apiKey: '', saveDir: '생성', artist: '', negCommon: '',
   model: 'nai-diffusion-4-5-full', sampler: 'k_euler_ancestral', size: '832x1216', steps: 28, scale: 6, rescale: 0.1, uc: 0,
-  quality: true, variety: false, order: 'action', delay: 0, rndDelay: true,
+  quality: true, qualityKind: 0, variety: false, order: 'action', delay: 0, rndDelay: true,
   chars: [], acts: [],
 };
 const run = { active: false, stop: false, items: [] };
@@ -234,10 +235,13 @@ function buildJobs() {
   else as.forEach((a) => cs.forEach((c) => jobs.push({ c, a })));
   return jobs;
 }
+const qualityText = (v5) => (v5 && S.qualityKind === 1 ? QUALITY_LIGHT : QUALITY_TAGS);
+// V5 요청의 tag_hint 값: NovelAI 사이트가 그림에 적는 번호 (품질 0 끔/1 Standard/3 Light, 프리셋 2 Heavy/3 Light/4 Human Focus/5 Furry Focus)
+const UC_HINT = [2, 3, 4, 0, 5];
 function requestBody(c, a, seed) {
   const v5 = S.model.includes('nai-diffusion-5');
   // 품질 태그와 프리셋 글자는 아래에서 한 번만 붙이니까, 칸에 이미 들어 있는 같은 글자는 빼서 쌓이지 않게 해요
-  const positive = joinTags(S.quality ? stripQuality(S.artist).text : S.artist, S.quality ? stripQuality(c.main).text : c.main, S.quality ? QUALITY_TAGS : '');
+  const positive = joinTags(S.quality ? stripQuality(S.artist).text : S.artist, S.quality ? stripQuality(c.main).text : c.main, S.quality ? qualityText(v5) : '');
   const ucText = v5 && S.uc === 1 ? UC_LIGHT_V5 : (UC_TEXT[S.uc] ?? UC_TEXT[0]);
   const negative = joinTags(ucText, S.uc === 3 ? S.negCommon : stripUc(S.negCommon).text);
   const cp = joinTags(c.look, a.tags), cn = joinTags(c.neg), has = !!(cp || cn);
@@ -255,7 +259,7 @@ function requestBody(c, a, seed) {
   };
   const ucNo = S.uc === 4 ? 3 : S.uc; // 퍼리 포커스는 번호 대신 글자로만 보내요
   const parameters = v5
-    ? { params_version: 4, ucPresetId: UC_ID[S.uc] || 'heavy', qualityPresetId: S.quality ? 'standard' : 'none', legacy_uc: false, straight_alpha: true, tag_hint_qt: S.quality ? 1 : 0, tag_hint_uc_preset: ucNo, ...common }
+    ? { params_version: 4, ucPresetId: UC_ID[S.uc] || 'heavy', qualityPresetId: S.quality && S.qualityKind !== 1 ? 'standard' : 'none', legacy_uc: false, straight_alpha: true, tag_hint_qt: S.quality ? (S.qualityKind === 1 ? 3 : 1) : 0, tag_hint_uc_preset: UC_HINT[S.uc] ?? 2, ...common }
     : { params_version: 3, ucPreset: ucNo, qualityToggle: S.quality, ...common };
   return { input: positive, model: S.model, action: 'generate', parameters, use_new_shared_trial: true };
 }
@@ -381,6 +385,11 @@ async function showWhere() {
   } catch (e) { /* 표시만 못 하는 거예요 */ }
 }
 // Variety+는 V5에서는 없는 기능이라 V5를 고르면 끄고 잠가요 (요청에도 안 보내요)
+function qualityUi() {
+  const v5 = S.model.includes('nai-diffusion-5'), sel = $('qualityKind');
+  sel.style.display = v5 ? '' : 'none'; sel.value = String(S.qualityKind || 0); sel.disabled = !S.quality;
+  $('qualityHint').textContent = `(${qualityText(v5)})`;
+}
 function varietyUi() {
   const v5 = S.model.includes('nai-diffusion-5'), cb = $('variety');
   cb.disabled = v5; cb.checked = v5 ? false : !!S.variety;
@@ -467,10 +476,10 @@ async function readImageTags(file) {
   // 품질 태그와 네거티브 프리셋 글자는 빼요 (생성할 때 자동으로 다시 붙으니까, 안 빼면 가져올 때마다 쌓여요)
   // 사이트 그림에는 품질/프리셋 켬·끔 표시가 따로 없어서, 글자가 들어 있었는지로 알아내요
   const hasPos = !!o.base, hasNeg = !!o.neg;
-  const qOn = stripQuality(o.base).n > 0, ucIdx = detectUc(o.neg);
+  const qOn = stripQuality(o.base).n > 0, qKind = stripPhrase(o.base, QUALITY_LIGHT).n > 0 ? 1 : 0, ucIdx = detectUc(o.neg);
   const clean = (v) => { const q = stripQuality(v.base), u = stripUc(v.neg); v.base = q.text; v.neg = u.text; return q.n + u.n; };
   const removed = Math.max(clean(o), hasActual ? clean(a) : 0); if (!hasActual) { a.base = o.base; a.neg = o.neg; }
-  return { orig: o, act: a, hasActual, seed: meta.seed, meta, removed, hasPos, hasNeg, qOn, ucIdx };
+  return { orig: o, act: a, hasActual, seed: meta.seed, meta, removed, hasPos, hasNeg, qOn, qKind, ucIdx };
 }
 
 // 그림 메타데이터를 NovelAI처럼 고른 항목만 그대로 가져와요 (태그를 걸러내거나 고치지 않아요)
@@ -508,7 +517,8 @@ function openTagDialog(file, info) {
     const v = cbs.actual.checked ? info.act : info.orig;
     if (cbs.prompt.checked) {
       S.artist = v.base; $('artist').value = S.artist; did.push('작가 태그 칸');
-      S.quality = info.qOn; $('quality').checked = S.quality; did.push(`품질 태그 ${S.quality ? '켬' : '끔'}`);
+      S.quality = info.qOn; S.qualityKind = info.qKind; $('quality').checked = S.quality; qualityUi();
+      did.push(`품질 태그 ${S.quality ? (info.qKind ? '켬 (Light)' : '켬') : '끔'}`);
     }
     if (cbs.chars.checked && v.chars.length) {
       const seed = cbs.seed.checked && info.seed !== undefined ? String(info.seed) : '';
@@ -577,8 +587,10 @@ function init() {
   bindValue('rescale', 'rescale', (v) => { const n = parseFloat(v); return Number.isFinite(n) ? n : 0; });
   bindValue('uc', 'uc', (v) => parseInt(v, 10) || 0);
   bindValue('order', 'order');
-  bindCheck('quality', 'quality'); bindCheck('variety', 'variety');
-  $('model').addEventListener('change', varietyUi); varietyUi();
+  bindCheck('quality', 'quality', qualityUi); bindCheck('variety', 'variety');
+  $('model').addEventListener('change', () => { varietyUi(); qualityUi(); }); varietyUi();
+  qualityUi();
+  $('qualityKind').addEventListener('change', () => { S.qualityKind = parseInt($('qualityKind').value, 10) || 0; save(); qualityUi(); });
   bindCheck('rndDelay', 'rndDelay', delayUi);
   $('delay').value = S.delay;
   $('delay').addEventListener('input', () => { S.delay = parseFloat($('delay').value) || 0; delayUi(); });
