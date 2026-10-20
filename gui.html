@@ -60,15 +60,16 @@
   #bar { display: flex; gap: 8px; align-items: center; padding: 10px 14px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
   #bar .spacer { flex: 1; }
   #name { color: var(--dim); max-width: 38vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  #stage-wrap { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; padding: 14px; overflow: auto;
+  #stage-wrap { flex: 1; min-height: 0; display: flex; padding: 14px; overflow: auto;
     background: repeating-conic-gradient(#1a1c20 0% 25%, #17191c 0% 50%) 0 0 / 22px 22px; }
-  #stage { position: relative; line-height: 0; box-shadow: 0 6px 30px #0008; }
+  #stage { margin: auto; flex: none; position: relative; line-height: 0; box-shadow: 0 6px 30px #0008; }
   #stage canvas { display: block; }
   #ov { position: absolute; left: 0; top: 0; }
-  #empty { color: var(--dim); text-align: center; line-height: 1.8; }
+  #empty { margin: auto; color: var(--dim); text-align: center; line-height: 1.8; }
   #toolbar { display: flex; gap: 10px; align-items: center; padding: 8px 14px; border-top: 1px solid var(--line); flex-wrap: wrap; }
   #toolbar .sz { display: flex; gap: 6px; align-items: center; color: var(--dim); font-size: 12px; }
   #toolbar .sz input { width: 110px; }
+  #toolbar .zoombox { display: inline-flex; gap: 4px; }
   #brushCur { position: fixed; z-index: 5; pointer-events: none; border-radius: 50%; display: none; transform: translate(-50%, -50%); }
   #info { padding: 8px 14px; border-top: 1px solid var(--line); color: var(--dim); font-size: 12px; min-height: 36px; }
 
@@ -182,6 +183,7 @@
   <div id="toolbar" style="display:none">
     <div class="seg" id="toolSeg"><button data-t="box" class="on" title="빈 곳을 끌면 가릴 박스 추가, 박스를 클릭하면 제외/복구">박스</button><button data-t="paint" title="끌어서 가릴 곳을 칠해요">브러시</button><button data-t="erase" title="브러시로 칠한 것을 문질러서 지워요 (칠한 자국만 없애요)">칠 지우개</button><button data-t="keep" title="끌어서 칠한 곳은 어떤 경우에도 가리지 않아요 (흰칠 금지구역)">금지구역</button></div>
     <label class="sz">굵기 <input type="range" id="brushSize" min="1" max="20" step="0.5" value="4"><span id="bszV"></span></label>
+    <span class="zoombox"><button id="zoomOut" title="축소">−</button><button id="zoomFit" title="화면에 맞추기"><span id="zoomV">맞춤</span></button><button id="zoomIn" title="확대">+</button></span>
     <button id="undoStroke" disabled title="마지막 브러시/지우개 획을 취소해요 (Ctrl+Z)">획 취소</button>
     <span class="hint" id="toolHint"></span>
   </div>
@@ -247,7 +249,7 @@ const S = {
   img: null, W: 0, H: 0, dets: [],
   excluded: new Set(), manual: [],
   paint: [], keep: [], hist: [], tool: 'box', stroke: null,
-  scale: 1, drag: null, loadSeq: 0,
+  scale: 1, zoom: 1, drag: null, loadSeq: 0,
 };
 
 // ---------- 공통 ----------
@@ -397,7 +399,7 @@ async function openImage(rel) {
     const [det] = await Promise.all([api(`/api/detect?dir=${dir}&rel=${r}&det=${encodeURIComponent(params().detectors.join(','))}`), loaded]);
     if (seq !== S.loadSeq) return;
     S.img = img; S.W = det.width; S.H = det.height; S.dets = det.detections;
-    applyReviewEdits(rel);
+    applyReviewEdits(rel); S.zoom = 1;
     $('stage').style.display = ''; $('empty').style.display = 'none';
     $('saveOne').disabled = false; $('resetEdit').disabled = !(S.excluded.size || S.manual.length || S.paint.length || S.keep.length);
     fit(); render();
@@ -410,13 +412,50 @@ function fit() {
   if (!S.img) return;
   const wrap = $('stage-wrap');
   const aw = wrap.clientWidth - 28, ah = wrap.clientHeight - 28;
-  S.scale = Math.min(aw / S.W, ah / S.H, 1.5);
+  S.base = Math.min(aw / S.W, ah / S.H, 1.5);
+  S.scale = S.base * S.zoom;
+  $('zoomV').textContent = S.zoom === 1 ? '맞춤' : Math.round(S.scale * 100) + '%';
   for (const id of ['cv', 'ov']) {
     const c = $(id); c.width = S.W; c.height = S.H;
     c.style.width = Math.round(S.W * S.scale) + 'px'; c.style.height = Math.round(S.H * S.scale) + 'px';
   }
 }
 window.addEventListener('resize', () => { fit(); render(); });
+// 확대/축소 (박스 편집에서 휠). 커서가 가리키는 그림 위 한 점이 그대로 그 자리에 머물게 스크롤을 맞춰요
+function zoomTo(z, cx, cy) {
+  if (!S.img) return;
+  const wrap = $('stage-wrap');
+  z = Math.max(1, Math.min(8, z));
+  const r = $('ov').getBoundingClientRect();
+  const ix = (cx - r.left) / S.scale, iy = (cy - r.top) / S.scale;
+  S.zoom = z; fit(); render();
+  const r2 = $('ov').getBoundingClientRect();
+  wrap.scrollLeft += r2.left + ix * S.scale - cx;
+  wrap.scrollTop += r2.top + iy * S.scale - cy;
+}
+function zoomBy(f, cx, cy) {
+  const w = $('stage-wrap').getBoundingClientRect();
+  zoomTo(S.zoom * f, cx == null ? w.left + w.width / 2 : cx, cy == null ? w.top + w.height / 2 : cy);
+}
+$('stage-wrap').addEventListener('wheel', (e) => {
+  if (S.view !== 'boxes' || !S.img) return;
+  e.preventDefault();
+  zoomBy(e.deltaY < 0 ? 1.15 : 1 / 1.15, e.clientX, e.clientY);
+  $('ov').dispatchEvent(new MouseEvent('mousemove', { clientX: e.clientX, clientY: e.clientY, bubbles: false }));
+}, { passive: false });
+$('zoomIn').onclick = () => zoomBy(1.25);
+$('zoomOut').onclick = () => zoomBy(1 / 1.25);
+$('zoomFit').onclick = () => { S.zoom = 1; fit(); render(); $('stage-wrap').scrollTo(0, 0); };
+// 휠 버튼을 누른 채 끌면 화면 이동
+{
+  let pan = null;
+  $('stage-wrap').addEventListener('mousedown', (e) => {
+    if (e.button !== 1 || !S.img) return;
+    e.preventDefault(); const w = $('stage-wrap'); pan = { x: e.clientX, y: e.clientY, l: w.scrollLeft, t: w.scrollTop };
+  });
+  window.addEventListener('mousemove', (e) => { if (!pan) return; const w = $('stage-wrap'); w.scrollLeft = pan.l - (e.clientX - pan.x); w.scrollTop = pan.t - (e.clientY - pan.y); });
+  window.addEventListener('mouseup', (e) => { if (e.button === 1) pan = null; });
+}
 
 // ---------- 계산 / 그리기 ----------
 function currentBoxes(p) {
@@ -667,6 +706,7 @@ window.addEventListener('keydown', (e) => {
 document.querySelectorAll('#viewSeg button').forEach((b) => (b.onclick = () => {
   S.view = b.dataset.v;
   document.querySelectorAll('#viewSeg button').forEach((x) => x.classList.toggle('on', x === b));
+  $('toolbar').style.display = S.view === 'boxes' ? '' : 'none'; fit(); // 도구 줄이 생기고 사라지면서 바뀐 높이에 맞춤
   render();
 }));
 document.querySelectorAll('#modeSeg button').forEach((b) => (b.onclick = () => setMode(b.dataset.m)));
