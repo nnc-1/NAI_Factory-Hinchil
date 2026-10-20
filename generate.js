@@ -11,6 +11,8 @@ const MAX_FAILS = 3;
 const QUALITY_TAGS = 'very aesthetic, masterpiece, no text';
 // NovelAI 사이트는 Full 모델에서 프리셋 앞에 'nsfw'를 붙이고, 퍼리 포커스 프리셋도 있어요 (사이트에서 받은 그림의 메타데이터로 확인)
 const FURRY_UC = '{worst quality}, distracting watermark, unfinished, bad quality, {widescreen}, upscale, {sequence}, {{grandfathered content}}, blurred foreground, chromatic aberration, sketch, everyone, [sketch background], simple, [flat colors], ych (character), outline, multiple scenes, [[horror (theme)]], comic';
+// V5의 Light 프리셋은 V4.5와 문구가 달라요 (NovelAI 공식 문서 Undesired Content). Heavy, Human Focus, Furry Focus는 같아요
+const UC_LIGHT_V5 = 'lowres, bad hands, bad anatomy, artistic error, sepia, white haze, worst quality, very displeasing, jpeg artifacts, 0::ai-generated::';
 const UC_TEXT = [
   'lowres, artistic error, film grain, scan artifacts, worst quality, bad quality, jpeg artifacts, very displeasing, chromatic aberration, dithering, halftone, screentone, multiple views, logo, too many watermarks, negative space, blank page',
   'lowres, artistic error, scan artifacts, worst quality, bad quality, jpeg artifacts, multiple views, very displeasing, too many watermarks, negative space, blank page',
@@ -51,11 +53,11 @@ function stripPhrases(text, phrases, eatNsfw) {
   return { text: t, n };
 }
 const stripQuality = (t) => stripPhrases(t, QUALITY_VARIANTS);
-const UC_STRIP = UC_TEXT.filter(Boolean);
+const UC_STRIP = [...UC_TEXT.filter(Boolean), UC_LIGHT_V5];
 const stripUc = (t) => stripPhrases(t, UC_STRIP, true);
 // 네거티브에 어떤 프리셋이 들어 있었는지: 0 heavy / 1 light / 2 human focus / 4 퍼리 포커스 / 3 없음
 function detectUc(t) {
-  const list = [[0, UC_TEXT[0]], [1, UC_TEXT[1]], [2, UC_TEXT[2]], [4, FURRY_UC]].sort((a, b) => splitTags(b[1]).length - splitTags(a[1]).length);
+  const list = [[0, UC_TEXT[0]], [1, UC_TEXT[1]], [1, UC_LIGHT_V5], [2, UC_TEXT[2]], [4, FURRY_UC]].sort((a, b) => splitTags(b[1]).length - splitTags(a[1]).length);
   for (const [i, ph] of list) if (stripPhrase(t, ph).n) return i;
   return 3;
 }
@@ -236,7 +238,8 @@ function requestBody(c, a, seed) {
   const v5 = S.model.includes('nai-diffusion-5');
   // 품질 태그와 프리셋 글자는 아래에서 한 번만 붙이니까, 칸에 이미 들어 있는 같은 글자는 빼서 쌓이지 않게 해요
   const positive = joinTags(S.quality ? stripQuality(S.artist).text : S.artist, S.quality ? stripQuality(c.main).text : c.main, S.quality ? QUALITY_TAGS : '');
-  const negative = joinTags(UC_TEXT[S.uc] ?? UC_TEXT[0], S.uc === 3 ? S.negCommon : stripUc(S.negCommon).text);
+  const ucText = v5 && S.uc === 1 ? UC_LIGHT_V5 : (UC_TEXT[S.uc] ?? UC_TEXT[0]);
+  const negative = joinTags(ucText, S.uc === 3 ? S.negCommon : stripUc(S.negCommon).text);
   const cp = joinTags(c.look, a.tags), cn = joinTags(c.neg), has = !!(cp || cn);
   const [width, height] = S.size.split('x').map(Number);
   const center = { x: 0.5, y: 0.5 };
