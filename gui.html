@@ -148,7 +148,6 @@
   <label class="chk"><input type="checkbox" id="skipExisting"><span>이미 처리한 파일은 건너뛰기</span></label>
   <label class="chk"><input type="checkbox" id="debugImg"><span>확인용 박스 그림도 저장 (결과\_debug)</span></label>
   <div style="margin-top:12px; display:flex; gap:6px; flex-wrap:wrap">
-    <button id="saveCfg">설정 저장</button>
     <span id="model">모델 확인 중</span>
   </div>
   <div style="margin-top:22px; padding-top:12px; border-top:1px solid var(--line)">
@@ -596,16 +595,25 @@ $('clearCache').onclick = async () => {
   } catch (e) { toast(e.message, 6000); }
 };
 $('resetAll').onclick = async () => {
-  if (!confirm('완전 초기화할까요?\n\n지워지는 것\n- 미리 스캔 결과(캐시)와 마지막에 쓴 폴더 기억\n- 저장한 설정(config.json)\n- 검수 체크 표시와 고친 박스 기록\n- 팩토리 탭에 입력한 내용: API 키, 캐릭터, 동작, 설정\n\n그림 파일과 결과 폴더는 지워지지 않아요. 되돌릴 수 없어요.')) return;
+  if (!confirm('완전 초기화할까요?\n\n지워지는 것\n- 미리 스캔 결과(캐시)와 마지막에 쓴 폴더 기억\n- 저장한 설정(config.json과 이 브라우저에 저장된 흰칠 옵션)\n- 검수 체크 표시와 고친 박스 기록\n- 팩토리 탭에 입력한 내용: API 키, 캐릭터, 동작, 설정\n\n그림 파일과 결과 폴더는 지워지지 않아요. 되돌릴 수 없어요.')) return;
   try {
     await api('/api/reset', {});
-    try { localStorage.removeItem('hinchil.gen.v1'); } catch (e) { /* 막혀 있어도 서버 쪽 초기화는 끝났어요 */ }
+    try { localStorage.removeItem('hinchil.gen.v1'); localStorage.removeItem(OPT_KEY); } catch (e) { /* 막혀 있어도 서버 쪽 초기화는 끝났어요 */ }
     location.reload();
   } catch (e) { toast(e.message, 6000); }
 };
-$('saveCfg').onclick = async () => {
-  try { await api('/api/config', params()); toast('설정을 config.json에 저장했어요'); } catch (e) { toast(e.message, 6000); }
-};
+// 흰칠 옵션(방식, 모양, 민감도, 부위 등)은 바꾸는 즉시 이 브라우저에 저장해요. 폴더는 서버가 따로 기억해요
+const OPT_KEY = 'hinchil.censor.v1';
+const OPT_KEYS = ['recursive', 'mode', 'shape', 'fillColor', 'mosaicSize', 'padding', 'feather', 'threshold', 'detectors', 'parts', 'skipExisting', 'skipReviewed', 'keepMetadata'];
+function saveOpts() {
+  try { const p = params(), o = {}; for (const k of OPT_KEYS) o[k] = p[k]; localStorage.setItem(OPT_KEY, JSON.stringify(o)); } catch (e) { /* 저장 못 해도 괜찮음 */ }
+}
+function loadOpts() {
+  try { const o = JSON.parse(localStorage.getItem(OPT_KEY) || 'null'); return o && typeof o === 'object' ? o : null; } catch (e) { return null; }
+}
+$('side').addEventListener('change', saveOpts);
+$('side').addEventListener('input', saveOpts);
+$('side').addEventListener('click', (e) => { if (e.target.closest('#modeSeg,#shapeSeg')) setTimeout(saveOpts, 0); });
 async function pick(inputId) {
   try {
     const j = await api('/api/pick-folder', { initial: $(inputId).value });
@@ -858,7 +866,8 @@ async function modelStatus() {
   buildParts();
   try {
     const c = await api('/api/config');
-    applyCfg(c.cfg, c.inputAbs, c.outputAbs);
+    const mine = loadOpts();
+    applyCfg(mine ? Object.assign({}, c.cfg, mine) : c.cfg, c.inputAbs, c.outputAbs);
     $('outInside').checked = !!c.outInside; await applyOutInside(false);
   } catch (e) { toast('설정을 못 읽었어요: ' + e.message, 6000); }
   modelStatus();
