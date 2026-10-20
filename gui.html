@@ -152,6 +152,8 @@
     <span id="model">모델 확인 중</span>
   </div>
   <div style="margin-top:22px; padding-top:12px; border-top:1px solid var(--line)">
+    <button id="clearCache" title="미리 스캔한 감지 결과만 지워 용량을 줄여요. 설정, 검수 표시, 팩토리 입력값은 그대로예요">캐시 비우기</button>
+    <div class="hint" style="margin-bottom:12px">미리 스캔한 결과만 지워 용량을 줄여요. 설정·검수 표시·API 키는 그대로예요. 폴더를 다시 열면 자동으로 다시 스캔해요.</div>
     <button id="resetAll" class="danger" title="캐시, 저장된 설정, 검수 표시, 팩토리 입력값(API 키 포함)을 모두 지워요. 그림 파일은 그대로예요">완전 초기화</button>
     <div class="hint">캐시·설정·검수 표시를 모두 지우고 처음 상태로 돌려요. 그림 파일은 안 지워요.</div>
   </div>
@@ -583,6 +585,15 @@ $('saveOne').onclick = async () => {
     toast('저장했어요: ' + j.out, 5000);
   } catch (e) { toast('저장 실패: ' + e.message, 6000); }
   $('saveOne').disabled = false;
+};
+$('clearCache').onclick = async () => {
+  if (!confirm('캐시를 비울까요?\n\n지워지는 것: 미리 스캔한 감지 결과\n그대로 남는 것: 설정, 검수 표시와 고친 박스, 마지막에 쓴 폴더, 팩토리 입력값(API 키 포함), 그림 파일\n\n다음에 폴더를 열면 자동으로 다시 스캔해요.')) return;
+  try {
+    const r = await api('/api/clear-cache', {});
+    const kb = r.bytes >= 1048576 ? (r.bytes / 1048576).toFixed(1) + 'MB' : Math.max(1, Math.round(r.bytes / 1024)) + 'KB';
+    toast(r.folders ? `캐시를 비웠어요: 폴더 ${r.folders}개, 그림 ${r.entries}장 분량, 약 ${kb}` : '비울 캐시가 없었어요', 5000);
+    if ($('inDir').value.trim()) loadList();
+  } catch (e) { toast(e.message, 6000); }
 };
 $('resetAll').onclick = async () => {
   if (!confirm('완전 초기화할까요?\n\n지워지는 것\n- 미리 스캔 결과(캐시)와 마지막에 쓴 폴더 기억\n- 저장한 설정(config.json)\n- 검수 체크 표시와 고친 박스 기록\n- 팩토리 탭에 입력한 내용: API 키, 캐릭터, 동작, 설정\n\n그림 파일과 결과 폴더는 지워지지 않아요. 되돌릴 수 없어요.')) return;

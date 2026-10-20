@@ -361,6 +361,13 @@ async function handle(req, res, port) {
       fs.writeFileSync(path.join(__dirname, 'config.json'), JSON.stringify(keep, null, 2) + '\n', 'utf8');
       return sendJson(res, 200, { ok: true });
     }
+    // 캐시만 비우기: 미리 스캔 결과만 지워요. 검수 표시, 설정, 마지막 폴더 기억은 그대로예요
+    if (req.method === 'POST' && u.pathname === '/api/clear-cache') {
+      if (job.state === 'running') throw new Error('폴더 전체 실행 중에는 캐시를 비울 수 없어요. 끝나거나 멈춘 뒤에 눌러 주세요');
+      const r = scanner.clearCache();
+      thumbCache.clear();
+      return sendJson(res, 200, { ok: true, ...r });
+    }
     // 완전 초기화: 캐시 폴더 + config.json 삭제. 그림 파일과 결과 폴더는 건드리지 않아요
     if (req.method === 'POST' && u.pathname === '/api/reset') {
       if (job.state === 'running') throw new Error('폴더 전체 실행 중에는 초기화할 수 없어요. 끝나거나 멈춘 뒤에 눌러 주세요');

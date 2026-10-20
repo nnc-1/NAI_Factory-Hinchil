@@ -277,5 +277,34 @@ module.exports = function createScanner({ H, ensure, isBusy }) {
     fs.rmSync(CACHE_DIR, { recursive: true, force: true });
   }
 
-  return { resetAll, setReviewed, reviewedList, reviewedEdits, detectCached, prune, cleanupOrphans, results, start, stop, status, userBusy, flushAll };
+  // 캐시만 비우기: 미리 스캔한 감지 결과만 지워요. 검수 표시, 고친 박스, 마지막에 쓴 폴더 기억, 설정은 그대로 둬요
+  function clearCache() {
+    try { stop(); } catch (e) { /* 실행 중이 아니면 무시 */ }
+    for (const st of stores.values()) if (st.timer) clearTimeout(st.timer);
+    stores.clear();
+    let names = [];
+    try { names = fs.readdirSync(CACHE_DIR).filter((n) => n.endsWith('.json') && n !== 'last-folders.json'); } catch (e) { return { folders: 0, entries: 0, bytes: 0 }; }
+    let folders = 0, entries = 0, bytes = 0;
+    for (const n of names) {
+      const f = path.join(CACHE_DIR, n);
+      try {
+        const before = fs.statSync(f).size;
+        const j = JSON.parse(fs.readFileSync(f, 'utf8'));
+        const cnt = j && j.files ? Object.keys(j.files).length : 0;
+        const keepReviewed = j && j.reviewed && typeof j.reviewed === 'object' && Object.keys(j.reviewed).length > 0;
+        if (keepReviewed) {
+          j.files = {};
+          fs.writeFileSync(f, JSON.stringify({ v: 1, dir: j.dir, reviewed: j.reviewed, files: {} }), 'utf8');
+          bytes += Math.max(0, before - fs.statSync(f).size);
+        } else {
+          fs.rmSync(f, { force: true });
+          bytes += before;
+        }
+        folders++; entries += cnt;
+      } catch (e) { /* 깨진 파일은 건너뜀 */ }
+    }
+    return { folders, entries, bytes };
+  }
+
+  return { clearCache, resetAll, setReviewed, reviewedList, reviewedEdits, detectCached, prune, cleanupOrphans, results, start, stop, status, userBusy, flushAll };
 };
