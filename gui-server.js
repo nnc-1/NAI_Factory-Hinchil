@@ -323,7 +323,7 @@ async function handle(req, res, port) {
     }
 
     // 설정
-    // 열려 있는 화면이 2초마다 신호를 보내요. 모두 닫히면 서버도 스스로 꺼져요 (--keep-alive 로 끌 수 있어요)
+    // 열려 있는 화면이 2초마다 신호를 보내요. 모두 닫히면 서버도 스스로 꺼져요 (기본은 꺼지지 않아요. --auto-quit 을 붙였을 때만 그래요)
     if (req.method === 'POST' && u.pathname === '/api/hb') { clients.set(String(q.get('id') || ''), Date.now()); everSeen = true; return sendJson(res, 200, { ok: true }); }
     if (req.method === 'POST' && u.pathname === '/api/bye') { clients.delete(String(q.get('id') || '')); lastGone = Date.now(); return sendJson(res, 200, { ok: true }); }
     // 팩토리의 '장 사이 쉬기'용: 주어진 시간(최대 60초) 뒤에 답해요
@@ -547,7 +547,7 @@ function whoUses(port) {
 const clients = new Map();
 let everSeen = false, lastGone = Date.now();
 function autoQuit() {
-  if (process.argv.includes('--keep-alive')) return;
+  if (!process.argv.includes('--auto-quit')) return; // 기본: 브라우저를 닫아도 검은 창은 그대로 둬요
   setInterval(() => {
     const now = Date.now();
     for (const [id, t] of clients) if (now - t > 5 * 60 * 1000) { clients.delete(id); lastGone = now; } // 닫는 신호 없이 사라진 화면
@@ -590,8 +590,8 @@ function listen(port) {
     console.log(c('36', `  ${line}`));
     console.log('');
     console.log(`   ${c('32', '▶')} 주소    ${c('1;32', url)}`);
-    console.log(c('90', '   ● 브라우저 창을 닫으면 이 창도 자동으로 꺼져요.'));
-    console.log(c('90', '   ● 이 창을 끄면 작동하지 않아요.'));
+    console.log(c('90', '   ● 브라우저를 닫아도 이 창은 꺼지지 않아요. 다 쓰고 나면 이 창을 직접 닫으세요.'));
+    console.log(c('90', '   ● 브라우저를 다시 열려면 위 주소로 들어가거나, 바로가기를 한 번 더 누르세요.'));
     console.log('');
     console.log(c('90', '   Made by 크랙 크리에이터 넉넉한 취향 (https://share.crack.wrtn.ai/4dihl6) 의 클로드 어시스턴트 서한결 제작'));
     console.log('');
