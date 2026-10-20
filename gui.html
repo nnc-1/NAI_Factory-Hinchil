@@ -181,7 +181,8 @@
     <div id="stage" style="display:none"><canvas id="cv"></canvas><canvas id="ov"></canvas></div>
   </div>
   <div id="toolbar" style="display:none">
-    <div class="seg" id="toolSeg"><button data-t="box" class="on" title="빈 곳을 끌면 가릴 박스 추가, 박스를 클릭하면 제외/복구">박스</button><button data-t="paint" title="끌어서 가릴 곳을 칠해요">브러시</button><button data-t="erase" title="브러시로 칠한 것을 문질러서 지워요 (칠한 자국만 없애요)">칠 지우개</button><button data-t="keep" title="끌어서 칠한 곳은 어떤 경우에도 가리지 않아요 (흰칠 금지구역)">금지구역</button><button data-t="unkeep" title="칠해 둔 금지구역(초록)을 문질러서 지워요">금지 지우개</button></div>
+    <div class="seg" id="toolSeg"><button data-c="box" class="on" title="빈 곳을 끌면 가릴 박스 추가, 박스를 클릭하면 제외/복구">박스</button><button data-c="paint" title="가릴 곳을 직접 칠해요">브러시</button><button data-c="keep" title="칠한 곳은 어떤 경우에도 가리지 않아요 (흰칠 금지구역)">금지구역</button></div>
+    <div class="seg" id="subSeg" style="display:none"><button data-m="draw" class="on" title="끌어서 칠해요">칠하기</button><button data-m="erase" title="칠해 둔 것을 문질러서 지워요">지우기</button></div>
     <label class="sz">굵기 <input type="range" id="brushSize" min="1" max="20" step="0.5" value="4"><span id="bszV"></span></label>
     <span class="zoombox"><button id="zoomOut" title="축소">−</button><button id="zoomFit" title="화면에 맞추기"><span id="zoomV">맞춤</span></button><button id="zoomIn" title="확대">+</button></span>
     <button id="undoStroke" disabled title="마지막 브러시/지우개 획을 취소해요 (Ctrl+Z)">획 취소</button>
@@ -697,13 +698,19 @@ window.addEventListener('mouseup', () => {
   render();
 });
 $('resetEdit').onclick = () => { S.excluded = new Set(); S.manual = []; clearStrokes(); render(); };
-document.querySelectorAll('#toolSeg button').forEach((b) => (b.onclick = () => {
-  S.tool = b.dataset.t;
-  document.querySelectorAll('#toolSeg button').forEach((x) => x.classList.toggle('on', x === b));
+// 도구 = 범주(박스 / 브러시 / 금지구역) + 칠하기·지우기
+S.cat = 'box'; S.sub = 'draw';
+function pickTool() {
+  S.tool = S.cat === 'box' ? 'box' : S.cat === 'paint' ? (S.sub === 'erase' ? 'erase' : 'paint') : (S.sub === 'erase' ? 'unkeep' : 'keep');
+  document.querySelectorAll('#toolSeg button').forEach((x) => x.classList.toggle('on', x.dataset.c === S.cat));
+  document.querySelectorAll('#subSeg button').forEach((x) => x.classList.toggle('on', x.dataset.m === S.sub));
+  $('subSeg').style.display = S.cat === 'box' ? 'none' : '';
   $('brushCur').style.display = 'none';
   $('toolHint').textContent = S.tool === 'keep' ? '칠한 곳(초록)은 박스를 키우거나 옮겨도 계속 안 가려져요' : S.tool === 'paint' ? '감지가 놓친 곳을 직접 칠해요' : S.tool === 'erase' ? '브러시로 칠한 자국만 지워요. 자동 감지 박스는 못 지워요 (그건 금지구역)' : S.tool === 'unkeep' ? '칠해 둔 금지구역(초록)만 지워요. 지운 자리는 다시 가려질 수 있어요' : '';
   render();
-}));
+}
+document.querySelectorAll('#toolSeg button').forEach((b) => (b.onclick = () => { if (S.cat !== b.dataset.c) S.sub = 'draw'; S.cat = b.dataset.c; pickTool(); })); // 범주를 바꾸면 칠하기부터
+document.querySelectorAll('#subSeg button').forEach((b) => (b.onclick = () => { S.sub = b.dataset.m; pickTool(); }));
 $('undoStroke').onclick = undoStroke;
 $('brushSize').addEventListener('input', () => { $('bszV').textContent = $('brushSize').value + '%'; });
 $('bszV').textContent = $('brushSize').value + '%';
