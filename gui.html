@@ -539,6 +539,12 @@ function undoStroke() {
   (t === 'paint' ? S.paint : S.keep).pop();
   render();
 }
+function commitStroke(st) {
+  const clean = Core.cleanStrokes([{ w: st.w, p: st.p }], S.W, S.H);
+  if (!clean.length) return;
+  if (st.t === 'keep' || st.t === 'unkeep') { if (st.t === 'unkeep') clean[0].e = 1; S.keep.push(clean[0]); S.hist.push('keep'); }
+  else { if (st.t === 'erase') clean[0].e = 1; S.paint.push(clean[0]); S.hist.push('paint'); }
+}
 function clearStrokes() { S.paint = []; S.keep = []; S.hist = []; }
 function drawCensor(ctx, p, boxes) {
   for (const b of boxes) {
@@ -640,6 +646,7 @@ function toImg(e) {
 $('ov').addEventListener('mousedown', (e) => {
   if (e.button !== 0) return;
   const [x, y] = toImg(e);
+  if (S.tool !== 'box' && S.paint.length + S.keep.length >= Core.STROKE_MAX) { toast(`한 그림에 획은 ${Core.STROKE_MAX}개까지예요. 수정 되돌리기나 획 취소로 줄여 주세요`, 5000); return; }
   if (S.tool !== 'box') { S.stroke = { t: S.tool, w: brushW(), p: [x, y] }; tintStrokes($('ov').getContext('2d'), [{ w: S.stroke.w, p: [x, y] }], STROKE_COLOR[S.tool]); return; }
   S.drag = { x0: x, y0: y, x1: x, y1: y, moved: false };
 });
@@ -656,6 +663,8 @@ window.addEventListener('mousemove', (e) => {
     if (Math.hypot(x - st.p[n - 2], y - st.p[n - 1]) < Math.max(1.5, st.w * 0.08)) return;
     tintStrokes($('ov').getContext('2d'), [{ w: st.w, p: [st.p[n - 2], st.p[n - 1], x, y] }], STROKE_COLOR[st.t]);
     st.p.push(x, y);
+    // 한 획이 너무 길어지면 여기서 끊어 저장하고 같은 자리에서 새 획으로 이어요 (한도를 넘은 부분이 빠지지 않게)
+    if (st.p.length >= (Core.STROKE_PTS_MAX - 10) * 2) { commitStroke(st); S.stroke = { t: st.t, w: st.w, p: [x, y] }; }
     return;
   }
   if (!S.drag) return;
@@ -666,11 +675,7 @@ window.addEventListener('mousemove', (e) => {
 window.addEventListener('mouseup', () => {
   if (S.stroke) {
     const st = S.stroke; S.stroke = null;
-    const clean = Core.cleanStrokes([{ w: st.w, p: st.p }], S.W, S.H);
-    if (clean.length) {
-      if (st.t === 'keep' || st.t === 'unkeep') { if (st.t === 'unkeep') clean[0].e = 1; S.keep.push(clean[0]); S.hist.push('keep'); }
-      else { if (st.t === 'erase') clean[0].e = 1; S.paint.push(clean[0]); S.hist.push('paint'); }
-    }
+    commitStroke(st);
     render();
     return;
   }
@@ -860,7 +865,8 @@ function applyReviewEdits(rel) {
     if (d) S.excluded.add(d.id);
   }
   S.manual = e.man.map((b) => ({ x1: b.x1, y1: b.y1, x2: b.x2, y2: b.y2, exact: true }));
-  S.paint = (e.paint || []).map((k) => ({ w: k.w, p: k.p.slice() })); S.keep = (e.keep || []).map((k) => ({ w: k.w, p: k.p.slice() }));
+  const copy = (k) => (k.e ? { w: k.w, p: k.p.slice(), e: 1 } : { w: k.w, p: k.p.slice() }); // 지우개 획 표시(e)도 그대로
+  S.paint = (e.paint || []).map(copy); S.keep = (e.keep || []).map(copy);
   S.hist = S.paint.map(() => 'paint').concat(S.keep.map(() => 'keep'));
 }
 // 그림 하나를 지금 화면 설정으로 결과 폴더에 저장. 열려 있는 그림이면 화면에서 고친 박스 그대로, 아니면 자동 감지 결과로.
@@ -887,7 +893,8 @@ async function saveFor(rel) {
   const active = picked.filter((d) => !excluded.has(d.id));
   const boxes = active.map((d) => ({ x1: d.x1, y1: d.y1, x2: d.x2, y2: d.y2, exact: false })).concat(manual);
   const j = await api('/api/save-one', { dir: p.inputDir, rel, params: p, boxes, paint, keep });
-  return { out: j.out, paint, keep, ex: picked.filter((d) => excluded.has(d.id)).map((d) => [d.label, d.x1, d.y1, d.x2, d.y2]), man: manual.map((b) => ({ x1: b.x1, y1: b.y1, x2: b.x2, y2: b.y2 })) };
+  const dup = (l) => l.map((k) => Object.assign({}, k, { p: k.p.slice() }));
+  return { out: j.out, paint: dup(paint), keep: dup(keep), ex: picked.filter((d) => excluded.has(d.id)).map((d) => [d.label, d.x1, d.y1, d.x2, d.y2]), man: manual.map((b) => ({ x1: b.x1, y1: b.y1, x2: b.x2, y2: b.y2 })) };
 }
 // 검수 체크를 켜면: 그 그림을 (고친 박스 그대로) 결과 폴더에 저장하고, 고친 내용도 캐시에 남김. 끄면 표시와 저장해 둔 편집만 지움(이미 저장된 결과 파일은 그대로).
 async function toggleReview(rel, force) {

@@ -139,7 +139,7 @@
 
   // 브러시 획 정리: [{w: 굵기(px), p: [x1,y1,x2,y2,...]}]. 서버 저장/적용과 화면이 같은 규칙을 씀
   // 숫자가 아닌 값, 너무 긴 획은 걸러내고 좌표는 소수 첫째 자리까지만 둠
-  const STROKE_MAX = 400, STROKE_PTS_MAX = 3000;
+  const STROKE_MAX = 2000, STROKE_PTS_MAX = 3000; // 화면에서도 이 한도를 넘기지 않게 막아요 (넘는 획이 조용히 빠지면 안 가려진 채 저장될 수 있어서)
   function cleanStrokes(list, W, H) {
     const out = [];
     if (!Array.isArray(list)) return out;
@@ -169,5 +169,5 @@
     return v >= 0.3 ? v : 0;
   }
 
-  return { NUDENET_LABELS, ANIME_LABELS, LABELS, decode, iou, nms, selectParts, padBox, shapeOf, fadeStops, cleanStrokes, strokeBlur };
+  return { NUDENET_LABELS, ANIME_LABELS, LABELS, decode, iou, nms, selectParts, padBox, shapeOf, fadeStops, cleanStrokes, strokeBlur, STROKE_MAX, STROKE_PTS_MAX };
 });
