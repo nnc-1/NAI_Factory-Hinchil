@@ -376,7 +376,7 @@ async function censor(raw, boxes, cfg, outPath, extra = {}) {
   const paint = core.cleanStrokes(extra.paint, raw.width, raw.height);
   const keep = core.cleanStrokes(extra.keep, raw.width, raw.height);
   const sigma = core.strokeBlur(cfg.brushSoft === undefined ? 0.3 : cfg.brushSoft, raw.width, raw.height);
-  const strokeMask = async (list) => {
+  const svgOf = (list) => {
     // 좌표쌍을 "M x y L x y L ..." 로 이어 붙임
     const paths = list.map((st) => {
       if (st.p.length === 2) return `<circle cx="${st.p[0]}" cy="${st.p[1]}" r="${r2(st.w / 2)}" fill="#fff"/>`;
@@ -384,7 +384,20 @@ async function censor(raw, boxes, cfg, outPath, extra = {}) {
       for (let i = 2; i < st.p.length; i += 2) d += `L${st.p[i]} ${st.p[i + 1]}`;
       return `<path d="${d}" fill="none" stroke="#fff" stroke-width="${st.w}" stroke-linecap="round" stroke-linejoin="round"/>`;
     }).join('');
-    let m = sharp(Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="${raw.width}" height="${raw.height}">${paths}</svg>`)).ensureAlpha();
+    return Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="${raw.width}" height="${raw.height}">${paths}</svg>`);
+  };
+  // 획을 순서대로 쌓아 마스크를 만듦. 지우개 획(e)은 그때까지 칠한 것에서 빼고, 그 뒤에 칠한 건 다시 살아남
+  const strokeMask = async (list) => {
+    let acc = null;
+    for (let i = 0; i < list.length; ) {
+      let j = i;
+      while (j < list.length && !!list[j].e === !!list[i].e) j++;
+      const layer = await sharp(svgOf(list.slice(i, j))).ensureAlpha().png().toBuffer();
+      if (!acc) acc = list[i].e ? await sharp({ create: { width: raw.width, height: raw.height, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } } }).png().toBuffer() : layer;
+      else acc = await sharp(acc).composite([{ input: layer, blend: list[i].e ? 'dest-out' : 'over' }]).png().toBuffer();
+      i = j;
+    }
+    let m = sharp(acc).ensureAlpha();
     if (sigma > 0) m = m.blur(sigma);
     return m.png().toBuffer();
   };

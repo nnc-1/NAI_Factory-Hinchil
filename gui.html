@@ -180,7 +180,7 @@
     <div id="stage" style="display:none"><canvas id="cv"></canvas><canvas id="ov"></canvas></div>
   </div>
   <div id="toolbar" style="display:none">
-    <div class="seg" id="toolSeg"><button data-t="box" class="on" title="빈 곳을 끌면 가릴 박스 추가, 박스를 클릭하면 제외/복구">박스</button><button data-t="paint" title="끌어서 가릴 곳을 칠해요">브러시</button><button data-t="keep" title="끌어서 칠한 곳은 어떤 경우에도 가리지 않아요 (흰칠 금지구역)">지우개(금지구역)</button></div>
+    <div class="seg" id="toolSeg"><button data-t="box" class="on" title="빈 곳을 끌면 가릴 박스 추가, 박스를 클릭하면 제외/복구">박스</button><button data-t="paint" title="끌어서 가릴 곳을 칠해요">브러시</button><button data-t="erase" title="브러시로 칠한 것을 문질러서 지워요 (칠한 자국만 없애요)">칠 지우개</button><button data-t="keep" title="끌어서 칠한 곳은 어떤 경우에도 가리지 않아요 (흰칠 금지구역)">금지구역</button></div>
     <label class="sz">굵기 <input type="range" id="brushSize" min="1" max="20" step="0.5" value="4"><span id="bszV"></span></label>
     <button id="undoStroke" disabled title="마지막 브러시/지우개 획을 취소해요 (Ctrl+Z)">획 취소</button>
     <span class="hint" id="toolHint"></span>
@@ -446,6 +446,7 @@ function strokeLayer(list, blur) {
   const x = c.getContext('2d');
   x.fillStyle = x.strokeStyle = '#fff'; x.lineCap = 'round'; x.lineJoin = 'round';
   for (const st of list) {
+    x.globalCompositeOperation = st.e ? 'destination-out' : 'source-over'; // 지우개 획은 그때까지 칠한 것에서 뺌
     if (st.p.length === 2) { x.beginPath(); x.arc(st.p[0], st.p[1], st.w / 2, 0, Math.PI * 2); x.fill(); continue; }
     x.lineWidth = st.w; x.beginPath(); x.moveTo(st.p[0], st.p[1]);
     for (let i = 2; i < st.p.length; i += 2) x.lineTo(st.p[i], st.p[i + 1]);
@@ -491,7 +492,7 @@ function tintStrokes(oc, list, color) {
   }
   oc.restore();
 }
-const STROKE_COLOR = { paint: 'rgba(80,160,255,.4)', keep: 'rgba(70,220,130,.4)' };
+const STROKE_COLOR = { paint: 'rgba(80,160,255,.4)', keep: 'rgba(70,220,130,.4)', erase: 'rgba(255,120,120,.4)' };
 function brushW() { return Math.max(1, Number($('brushSize').value) / 100 * Math.min(S.W, S.H)); }
 function undoStroke() {
   const t = S.hist.pop();
@@ -584,7 +585,7 @@ function render() {
   $('info').textContent =
     `${S.W}×${S.H} · 자동 감지 ${picked.length}곳` + (exCnt ? ` (제외 ${exCnt})` : '') +
     (S.manual.length ? ` · 직접 추가 ${S.manual.length}곳` : '') + (S.paint.length ? ` · 브러시 ${S.paint.length}획` : '') + (S.keep.length ? ` · 금지구역 ${S.keep.length}획` : '') +
-    (S.view === 'boxes' ? (S.tool === 'box' ? ' · 박스를 클릭하면 제외/복구, 빈 곳을 끌면 가릴 영역 추가(파란 박스 클릭하면 삭제)' : S.tool === 'paint' ? ' · 끌어서 가릴 곳을 칠해요 (Ctrl+Z로 한 획씩 취소)' : ' · 끌어서 칠한 곳(초록)은 어떤 경우에도 가리지 않아요 (Ctrl+Z로 한 획씩 취소)') : '');
+    (S.view === 'boxes' ? (S.tool === 'box' ? ' · 박스를 클릭하면 제외/복구, 빈 곳을 끌면 가릴 영역 추가(파란 박스 클릭하면 삭제)' : S.tool === 'paint' ? ' · 끌어서 가릴 곳을 칠해요 (Ctrl+Z로 한 획씩 취소)' : S.tool === 'erase' ? ' · 브러시로 칠한 자국을 문질러 지워요 (Ctrl+Z로 한 획씩 취소)' : ' · 끌어서 칠한 곳(초록)은 어떤 경우에도 가리지 않아요 (Ctrl+Z로 한 획씩 취소)') : '');
   if (!picked.length && S.view === 'result') $('info').textContent += ' · 가릴 곳을 못 찾았어요 (민감도를 내려 보세요)';
 }
 
@@ -603,7 +604,7 @@ $('ov').addEventListener('mousemove', (e) => {
   const c = $('brushCur');
   if (S.tool === 'box' || S.view !== 'boxes') { c.style.display = 'none'; return; }
   const d = brushW() * S.scale;
-  c.style.cssText = `display:block;left:${e.clientX}px;top:${e.clientY}px;width:${d}px;height:${d}px;border:1.5px solid ${S.tool === 'keep' ? '#46dc82' : '#50a0ff'};box-shadow:0 0 0 1px #0007`;
+  c.style.cssText = `display:block;left:${e.clientX}px;top:${e.clientY}px;width:${d}px;height:${d}px;border:1.5px solid ${S.tool === 'keep' ? '#46dc82' : S.tool === 'erase' ? '#ff7878' : '#50a0ff'};box-shadow:0 0 0 1px #0007`;
 });
 $('ov').addEventListener('mouseleave', () => { $('brushCur').style.display = 'none'; });
 window.addEventListener('mousemove', (e) => {
@@ -623,7 +624,10 @@ window.addEventListener('mouseup', () => {
   if (S.stroke) {
     const st = S.stroke; S.stroke = null;
     const clean = Core.cleanStrokes([{ w: st.w, p: st.p }], S.W, S.H);
-    if (clean.length) { (st.t === 'paint' ? S.paint : S.keep).push(clean[0]); S.hist.push(st.t); }
+    if (clean.length) {
+      if (st.t === 'keep') { S.keep.push(clean[0]); S.hist.push('keep'); }
+      else { if (st.t === 'erase') clean[0].e = 1; S.paint.push(clean[0]); S.hist.push('paint'); }
+    }
     render();
     return;
   }
@@ -649,7 +653,7 @@ document.querySelectorAll('#toolSeg button').forEach((b) => (b.onclick = () => {
   S.tool = b.dataset.t;
   document.querySelectorAll('#toolSeg button').forEach((x) => x.classList.toggle('on', x === b));
   $('brushCur').style.display = 'none';
-  $('toolHint').textContent = S.tool === 'keep' ? '칠한 곳(초록)은 박스를 키우거나 옮겨도 계속 안 가려져요' : S.tool === 'paint' ? '감지가 놓친 곳을 직접 칠해요' : '';
+  $('toolHint').textContent = S.tool === 'keep' ? '칠한 곳(초록)은 박스를 키우거나 옮겨도 계속 안 가려져요' : S.tool === 'paint' ? '감지가 놓친 곳을 직접 칠해요' : S.tool === 'erase' ? '브러시로 칠한 자국만 지워요. 자동 감지 박스는 못 지워요 (그건 금지구역)' : '';
   render();
 }));
 $('undoStroke').onclick = undoStroke;

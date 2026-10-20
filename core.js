@@ -155,7 +155,11 @@
         if (W && H) p.push(r1(Math.max(-w, Math.min(W + w, x))), r1(Math.max(-w, Math.min(H + w, y))));
         else p.push(r1(x), r1(y));
       }
-      if (p.length >= 2) out.push({ w: r1(Math.min(w, W && H ? Math.max(W, H) : 100000)), p });
+      if (p.length >= 2) {
+        const o = { w: r1(Math.min(w, W && H ? Math.max(W, H) : 100000)), p };
+        if (s.e) o.e = 1; // 브러시로 칠한 것을 문질러 지우는 획 (순서대로 적용)
+        out.push(o);
+      }
     }
     return out;
   }
