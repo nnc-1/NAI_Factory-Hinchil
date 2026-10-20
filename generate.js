@@ -9,15 +9,16 @@ const MAX_SEED = 4294967295;
 const RETRY_MS = 5000;
 const MAX_FAILS = 3;
 const QUALITY_TAGS = 'very aesthetic, masterpiece, no text';
+// NovelAI 사이트는 Full 모델에서 프리셋 앞에 'nsfw'를 붙이고, 퍼리 포커스 프리셋도 있어요 (사이트에서 받은 그림의 메타데이터로 확인)
+const FURRY_UC = '{worst quality}, distracting watermark, unfinished, bad quality, {widescreen}, upscale, {sequence}, {{grandfathered content}}, blurred foreground, chromatic aberration, sketch, everyone, [sketch background], simple, [flat colors], ych (character), outline, multiple scenes, [[horror (theme)]], comic';
 const UC_TEXT = [
   'lowres, artistic error, film grain, scan artifacts, worst quality, bad quality, jpeg artifacts, very displeasing, chromatic aberration, dithering, halftone, screentone, multiple views, logo, too many watermarks, negative space, blank page',
   'lowres, artistic error, scan artifacts, worst quality, bad quality, jpeg artifacts, multiple views, very displeasing, too many watermarks, negative space, blank page',
   'lowres, artistic error, film grain, scan artifacts, worst quality, bad quality, jpeg artifacts, very displeasing, chromatic aberration, dithering, halftone, screentone, multiple views, logo, too many watermarks, negative space, blank page, @_@, mismatched pupils, glowing eyes, bad anatomy',
   '',
+  FURRY_UC,
 ];
-const UC_ID = ['heavy', 'light', 'human_focus', 'none'];
-// NovelAI 사이트는 Full 모델에서 프리셋 앞에 'nsfw'를 붙이고, 퍼리 포커스 프리셋도 있어요 (사이트에서 받은 그림의 메타데이터로 확인)
-const FURRY_UC = '{worst quality}, distracting watermark, unfinished, bad quality, {widescreen}, upscale, {sequence}, {{grandfathered content}}, blurred foreground, chromatic aberration, sketch, everyone, [sketch background], simple, [flat colors], ych (character), outline, multiple scenes, [[horror (theme)]], comic';
+const UC_ID = ['heavy', 'light', 'human_focus', 'none', 'none']; // 퍼리 포커스(4)는 글자를 직접 보내서, 프리셋 이름은 none으로 보내요
 
 // 품질 태그 / 네거티브 프리셋 글자는 생성할 때 이 프로그램이 알아서 붙여요.
 // 그림에서 가져온 프롬프트에 이미 들어 있으면 빼 줘야 다시 생성할수록 쌓이지 않아요.
@@ -50,7 +51,7 @@ function stripPhrases(text, phrases, eatNsfw) {
   return { text: t, n };
 }
 const stripQuality = (t) => stripPhrases(t, QUALITY_VARIANTS);
-const UC_STRIP = [...UC_TEXT.filter(Boolean), FURRY_UC];
+const UC_STRIP = UC_TEXT.filter(Boolean);
 const stripUc = (t) => stripPhrases(t, UC_STRIP, true);
 // 네거티브에 어떤 프리셋이 들어 있었는지: 0 heavy / 1 light / 2 human focus / 4 퍼리 포커스 / 3 없음
 function detectUc(t) {
@@ -249,9 +250,10 @@ function requestBody(c, a, seed) {
     v4_negative_prompt: { caption: { base_caption: negative, char_captions: has ? [{ char_caption: cn, centers: [center] }] : [] }, legacy_uc: false },
     negative_prompt: negative, deliberate_euler_ancestral_bug: false, prefer_brownian: true, noise_schedule: 'karras', image_format: 'png', stream: 'msgpack',
   };
+  const ucNo = S.uc === 4 ? 3 : S.uc; // 퍼리 포커스는 번호 대신 글자로만 보내요
   const parameters = v5
-    ? { params_version: 4, ucPresetId: UC_ID[S.uc] || 'heavy', qualityPresetId: S.quality ? 'standard' : 'none', legacy_uc: false, straight_alpha: true, tag_hint_qt: S.quality ? 1 : 0, tag_hint_uc_preset: S.uc, ...common }
-    : { params_version: 3, ucPreset: S.uc, qualityToggle: S.quality, ...common };
+    ? { params_version: 4, ucPresetId: UC_ID[S.uc] || 'heavy', qualityPresetId: S.quality ? 'standard' : 'none', legacy_uc: false, straight_alpha: true, tag_hint_qt: S.quality ? 1 : 0, tag_hint_uc_preset: ucNo, ...common }
+    : { params_version: 3, ucPreset: ucNo, qualityToggle: S.quality, ...common };
   return { input: positive, model: S.model, action: 'generate', parameters, use_new_shared_trial: true };
 }
 function validate(jobs) {
@@ -524,8 +526,7 @@ function openTagDialog(file, info) {
       did.push('설정');
     }
     if (cbs.neg.checked) {
-      if (info.ucIdx <= 3) { S.uc = info.ucIdx; $('uc').value = String(S.uc); did.push(`네거티브 프리셋 ${$('uc').selectedOptions[0]?.textContent || ''}`.trim()); }
-      else toast('이 그림은 퍼리 포커스 프리셋이에요. 팩토리에는 없어서 프리셋 글자만 빼고 가져왔어요', 6000);
+      S.uc = info.ucIdx; $('uc').value = String(S.uc); did.push(`네거티브 프리셋 ${$('uc').selectedOptions[0]?.textContent || ''}`.trim());
     }
     save(); dlg.classList.remove('on');
     toast(did.length ? `가져왔어요: ${did.join(', ')}${info.removed ? '\n(품질 태그·네거티브 프리셋 글자는 생성할 때 자동으로 붙어서 뺐어요)' : ''}` : '가져올 항목을 골라 주세요', info.removed ? 5000 : 3500);
