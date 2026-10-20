@@ -17,6 +17,35 @@ const UC_TEXT = [
 ];
 const UC_ID = ['heavy', 'light', 'human_focus', 'none'];
 
+// 품질 태그 / 네거티브 프리셋 글자는 생성할 때 이 프로그램이 알아서 붙여요.
+// 그림에서 가져온 프롬프트에 이미 들어 있으면 빼 줘야 다시 생성할수록 쌓이지 않아요.
+const QUALITY_VARIANTS = [
+  QUALITY_TAGS,
+  'location, very aesthetic, masterpiece, no text',
+  'very aesthetic, masterpiece, no text, -0.8::feet::, rating:general',
+  'rating:general, amazing quality, very aesthetic, absurdres',
+  'best quality, amazing quality, very aesthetic, absurdres',
+];
+const splitTags = (t) => String(t || '').split(',').map((x) => x.trim()).filter(Boolean);
+// text 안에서 phrase(쉼표로 이어진 태그 묶음)가 통째로 이어져 있는 곳을 모두 지워요. 지운 횟수도 알려 줘요
+function stripPhrase(text, phrase) {
+  const tags = splitTags(text), want = splitTags(phrase).map((x) => x.toLowerCase());
+  if (!want.length) return { text: String(text || ''), n: 0 };
+  const out = []; let n = 0;
+  for (let i = 0; i < tags.length;) {
+    if (want.every((w, k) => tags[i + k] !== undefined && tags[i + k].toLowerCase() === w)) { i += want.length; n++; }
+    else out.push(tags[i++]);
+  }
+  return n ? { text: out.join(', '), n } : { text: String(text || ''), n: 0 };
+}
+function stripPhrases(text, phrases) {
+  let t = text, n = 0;
+  for (const ph of [...phrases].sort((x, y) => splitTags(y).length - splitTags(x).length)) { const r = stripPhrase(t, ph); t = r.text; n += r.n; }
+  return { text: t, n };
+}
+const stripQuality = (t) => stripPhrases(t, QUALITY_VARIANTS);
+const stripUc = (t) => stripPhrases(t, UC_TEXT.filter(Boolean));
+
 let uid = Date.now();
 const S = {
   apiKey: '', saveDir: '생성', artist: '', negCommon: '',
@@ -191,8 +220,9 @@ function buildJobs() {
 }
 function requestBody(c, a, seed) {
   const v5 = S.model.includes('nai-diffusion-5');
-  const positive = joinTags(S.artist, c.main, S.quality ? QUALITY_TAGS : '');
-  const negative = joinTags(UC_TEXT[S.uc] ?? UC_TEXT[0], S.negCommon);
+  // 품질 태그와 프리셋 글자는 아래에서 한 번만 붙이니까, 칸에 이미 들어 있는 같은 글자는 빼서 쌓이지 않게 해요
+  const positive = joinTags(S.quality ? stripQuality(S.artist).text : S.artist, S.quality ? stripQuality(c.main).text : c.main, S.quality ? QUALITY_TAGS : '');
+  const negative = joinTags(UC_TEXT[S.uc] ?? UC_TEXT[0], S.uc === 3 ? S.negCommon : stripUc(S.negCommon).text);
   const cp = joinTags(c.look, a.tags), cn = joinTags(c.neg), has = !!(cp || cn);
   const [width, height] = S.size.split('x').map(Number);
   const center = { x: 0.5, y: 0.5 };
@@ -416,7 +446,10 @@ async function readImageTags(file) {
   const ap = meta.actual_prompts;
   const a = ap && (ap.prompt || ap.negative_prompt) ? pack(ap.prompt, ap.negative_prompt, o.base, o.neg) : o;
   const hasActual = JSON.stringify(a) !== JSON.stringify(o);
-  return { orig: o, act: a, hasActual, seed: meta.seed, meta };
+  // 품질 태그와 네거티브 프리셋 글자는 빼요 (생성할 때 자동으로 다시 붙으니까, 안 빼면 가져올 때마다 쌓여요)
+  const clean = (v) => { const q = stripQuality(v.base), u = stripUc(v.neg); v.base = q.text; v.neg = u.text; return q.n + u.n; };
+  const removed = Math.max(clean(o), hasActual ? clean(a) : 0); if (!hasActual) { a.base = o.base; a.neg = o.neg; }
+  return { orig: o, act: a, hasActual, seed: meta.seed, meta, removed };
 }
 
 // 그림 메타데이터를 NovelAI처럼 고른 항목만 그대로 가져와요 (태그를 걸러내거나 고치지 않아요)
@@ -446,7 +479,7 @@ function openTagDialog(file, info) {
     row.append(cb, document.createTextNode(' ' + label + (has ? '' : key === 'actual' ? ' (이 그림은 해당 없음)' : ' (없음)'))); if (!has) row.style.opacity = '.5';
     cbs[key] = cb; box.appendChild(row);
   }
-  const note = el('div', 'dim', '※ 가져온 프롬프트는 고치지 않고 그대로 넣어요. 그림에 든 포즈·표정 같은 동작 태그는 자동으로 나눠지지 않으니, 필요하면 직접 지우고 동작 카드에 옮겨 주세요.');
+  const note = el('div', 'dim', '※ 가져온 프롬프트는 고치지 않고 그대로 넣어요. 다만 품질 태그와 네거티브 프리셋 글자는 생성할 때 자동으로 붙으니, 쌓이지 않게 빼고 가져와요. 그림에 든 포즈·표정 같은 동작 태그는 자동으로 나눠지지 않으니, 필요하면 직접 지우고 동작 카드에 옮겨 주세요.');
   note.style.margin = '8px 0';
   const go = el('button', 'primary', '메타데이터 가져오기');
   go.addEventListener('click', () => {
@@ -470,7 +503,7 @@ function openTagDialog(file, info) {
       did.push('설정');
     }
     save(); dlg.classList.remove('on');
-    toast(did.length ? `가져왔어요: ${did.join(', ')}` : '가져올 항목을 골라 주세요');
+    toast(did.length ? `가져왔어요: ${did.join(', ')}${info.removed ? '\n(품질 태그·네거티브 프리셋 글자는 생성할 때 자동으로 붙어서 뺐어요)' : ''}` : '가져올 항목을 골라 주세요', info.removed ? 5000 : 3500);
   });
   box.append(note, go);
   dlg.appendChild(box); dlg.classList.add('on');

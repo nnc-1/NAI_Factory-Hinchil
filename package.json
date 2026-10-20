@@ -1,6 +1,6 @@
 {
   "name": "hinchil",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "private": true,
   "description": "NovelAI 배치 생성(팩토리)과 노출 부위 자동 흰칠/모자이크(흰칠)",
   "main": "hinchil.js",
