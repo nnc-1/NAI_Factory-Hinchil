@@ -93,4 +93,4 @@
 https://github.com/nnc-1/NAI_Factory-Hinchil#readme
 
 [Made by]
-크랙 크리에이터 넉넉한 취향 (https://share.crack.wrtn.ai/4dihl6) 의 클로드 어시스턴트 서한결 제작
+넉넉한 취향이 클로드와 함께 만들었어요 (https://share.crack.wrtn.ai/4dihl6)

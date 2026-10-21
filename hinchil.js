@@ -1,5 +1,5 @@
 'use strict';
-// Made by 크랙 크리에이터 넉넉한 취향 (https://share.crack.wrtn.ai/4dihl6) 의 클로드 어시스턴트 서한결 제작
+// Made by 넉넉한 취향이 클로드와 함께 만들었어요 (https://share.crack.wrtn.ai/4dihl6)
 // 흰칠: 폴더 안 그림에서 노출 부위를 찾아 흰색(또는 모자이크)으로 덮어 별도 폴더에 저장.
 // 원본은 건드리지 않음. 감지는 onnx 모델을 내 PC에서 돌림 (API 요금 없음).
 // 명령줄로도, GUI(gui-server.js)에서도 이 파일의 함수를 같이 씀.

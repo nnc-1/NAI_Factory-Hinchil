@@ -419,7 +419,7 @@ NAI_Factory-Hinchil/
 
 ## 크레딧
 
-- **Made by** — 크랙 크리에이터 [넉넉한 취향](https://share.crack.wrtn.ai/4dihl6)의 클로드 어시스턴트 서한결 제작
+- **Made by** — [넉넉한 취향](https://share.crack.wrtn.ai/4dihl6)이 클로드와 함께 만들었어요
 - 팩토리 탭은 [KDH0119님의 Novel-AI-Image-Add-Generator](https://github.com/KDH0119/Novel-AI-Image-Add-Generator)에서 영감을 받아 새로 만들었어요.
 - 감지 모델: [deepghs/anime_censor_detection](https://huggingface.co/deepghs/anime_censor_detection)
 

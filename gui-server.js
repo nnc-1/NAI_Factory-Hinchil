@@ -1,5 +1,5 @@
 'use strict';
-// Made by 크랙 크리에이터 넉넉한 취향 (https://share.crack.wrtn.ai/4dihl6) 의 클로드 어시스턴트 서한결 제작
+// Made by 넉넉한 취향이 클로드와 함께 만들었어요 (https://share.crack.wrtn.ai/4dihl6)
 // NAI Factory · Hinchil GUI 서버: 내 PC(127.0.0.1)에서만 열리는 작은 웹 화면.
 // 브라우저에서 파라미터를 바꿔 가며 미리보기하고, 폴더 전체 실행까지 함.
 
@@ -593,7 +593,7 @@ function listen(port) {
     console.log(c('90', '   ● 브라우저를 닫아도 이 창은 꺼지지 않아요. 다 쓰고 나면 이 창을 직접 닫으세요.'));
     console.log(c('90', '   ● 브라우저를 다시 열려면 위 주소로 들어가거나, 바로가기를 한 번 더 누르세요.'));
     console.log('');
-    console.log(c('90', '   Made by 크랙 크리에이터 넉넉한 취향 (https://share.crack.wrtn.ai/4dihl6) 의 클로드 어시스턴트 서한결 제작'));
+    console.log(c('90', '   Made by 넉넉한 취향이 클로드와 함께 만들었어요 (https://share.crack.wrtn.ai/4dihl6)'));
     console.log('');
     openUrl(url);
     autoQuit();

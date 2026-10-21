@@ -1,5 +1,5 @@
 'use strict';
-// Made by 크랙 크리에이터 넉넉한 취향 (https://share.crack.wrtn.ai/4dihl6) 의 클로드 어시스턴트 서한결 제작
+// Made by 넉넉한 취향이 클로드와 함께 만들었어요 (https://share.crack.wrtn.ai/4dihl6)
 // 서버(Node)와 GUI(브라우저)가 같이 쓰는 계산 코드: 감지 결과 해석, 박스 정리, 가릴 모양 계산
 (function (root, factory) {
   if (typeof module === 'object' && module.exports) module.exports = factory();
