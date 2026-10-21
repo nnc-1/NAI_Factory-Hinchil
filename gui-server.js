@@ -317,6 +317,10 @@ async function handle(req, res, port) {
       const out = await genApi.generate({ key: String(req.headers['x-nai-key'] || '').trim(), body: body.body, dir: abs(String(body.dir || '').trim()), filename: body.filename });
       return sendJson(res, 200, out);
     }
+    // 생성 탭: Anlas와 V5 사용량(%) 읽기 (키는 요청 때만 받아서 쓰고 저장하지 않음)
+    if (req.method === 'POST' && u.pathname === '/api/gen/balance') {
+      return sendJson(res, 200, await genApi.balance(String(req.headers['x-nai-key'] || '').trim()));
+    }
     if (req.method === 'GET' && u.pathname === '/core.js') {
       res.writeHead(200, { 'Content-Type': MIME['.js'], 'Cache-Control': 'no-store' });
       return res.end(fs.readFileSync(path.join(__dirname, 'core.js')));

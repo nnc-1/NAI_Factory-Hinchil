@@ -76,4 +76,44 @@ async function generate({ key, body, dir, filename }) {
   return { ok: true, name, bytes: png.length };
 }
 
-module.exports = { generate, firstImageFromZip, safeName };
+// ----- 잔여량 (Anlas, V5 사용량 %) -----
+// 계정 정보를 돌려주는 주소가 바뀐 적이 있어서, 새 주소부터 시도하고 안 되면 옛 주소를 써요.
+const BALANCE_URLS = ['https://image.novelai.net/user/subscription', 'https://api.novelai.net/user/data'];
+const num = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : null);
+
+// 응답(JSON)에서 Anlas와 V5 사용량을 뽑아요. 못 찾은 값은 null.
+function parseBalance(j) {
+  if (!j || typeof j !== 'object') return null;
+  const sub = j.subscription && typeof j.subscription === 'object' ? j.subscription : j;
+  const steps = sub.trainingStepsLeft || j.trainingStepsLeft || null;
+  const fixed = steps ? num(steps.fixedTrainingStepsLeft) : null;
+  const purchased = steps ? num(steps.purchasedTrainingSteps) : null;
+  const usage = (sub.usage && typeof sub.usage === 'object' ? sub.usage : null) || (j.usage && typeof j.usage === 'object' ? j.usage : null);
+  const pct = usage ? num(usage.percent) : null;
+  if (fixed === null && purchased === null && pct === null) return null;
+  return {
+    anlas: fixed === null && purchased === null ? null : (fixed || 0) + (purchased || 0),
+    fixed, purchased,
+    usagePercent: pct, // V5 사용량: 100이 가득, 쓰면 줄어요
+    usageNegative: usage && typeof usage.isNegative === 'boolean' ? usage.isNegative : null,
+    tier: num(sub.tier), active: typeof sub.active === 'boolean' ? sub.active : null,
+  };
+}
+
+async function balance(key) {
+  if (!key) return { ok: false, status: 401, error: 'NovelAI API 키가 필요해요' };
+  let last = '';
+  for (const url of BALANCE_URLS) {
+    try {
+      const res = await fetch(url, { headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' }, signal: AbortSignal.timeout(15000) });
+      if (res.status === 401) return { ok: false, status: 401, error: '키가 올바르지 않아요 (401)' };
+      if (!res.ok) { last = `서버 응답 ${res.status}`; continue; }
+      const b = parseBalance(await res.json());
+      if (b) return { ok: true, ...b };
+      last = '응답에서 잔여량을 찾지 못했어요';
+    } catch (e) { last = e.name === 'TimeoutError' ? '시간 초과' : e.message; }
+  }
+  return { ok: false, status: 0, error: `잔여량을 못 읽었어요: ${String(last).replace(key, '***')}` };
+}
+
+module.exports = { generate, balance, parseBalance, firstImageFromZip, safeName };

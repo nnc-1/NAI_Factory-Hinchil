@@ -313,7 +313,7 @@ async function start(override) {
       if (out.ok) {
         fails = 0; done++;
         run.items.push({ name: out.name, dir: S.saveDir.trim(), size: sz, label: `${i + 1}. ${c.name} · ${a.name} · ${seed}` });
-        progress(done, jobs.length); renderResults();
+        progress(done, jobs.length); renderResults(); refreshBalanceSoon();
       } else {
         if ([400, 401, 402, 403].includes(out.status) || /폴더|키가 필요/.test(out.error || '')) {
           toast(`${out.error}\n해결되지 않는 오류라 멈춰요. (401: 키 확인, 402: Anlas/구독 확인)`, 9000);
@@ -375,6 +375,27 @@ function keyState() {
   const st = $('keyState'), has = !!S.apiKey.trim();
   st.className = has ? 'ok' : 'no'; st.textContent = has ? '✓ 이 브라우저에 저장됨' : '키가 없어요. 넣으면 바로 저장돼요';
 }
+// ---------- 잔여량 (Anlas, V5 사용량) ----------
+let balSeq = 0, balTimer = null, balLast = 0;
+async function refreshBalance() {
+  const box = $('bal'), txt = $('balText'), key = S.apiKey.trim();
+  if (!key) { box.style.display = 'none'; return; }
+  box.style.display = '';
+  const my = ++balSeq; balLast = Date.now();
+  if (!txt.textContent) txt.textContent = '잔여량 확인 중...';
+  try {
+    const r = await (await fetch('/api/gen/balance', { method: 'POST', headers: { 'x-nai-key': key } })).json();
+    if (my !== balSeq) return;
+    if (!r.ok) { txt.className = 'err'; txt.textContent = r.error || '잔여량을 못 읽었어요'; return; }
+    const f = (n) => n.toLocaleString('ko-KR');
+    const lines = [];
+    if (r.usagePercent !== null) lines.push(`V5 잔여량  ${r.usagePercent}%${r.usageNegative ? ' (한도 초과)' : ''}`);
+    if (r.anlas !== null) lines.push(`Anlas  ${f(r.anlas)}` + (r.fixed !== null && r.purchased !== null && r.purchased > 0 ? `  (구독 ${f(r.fixed)} + 구매 ${f(r.purchased)})` : ''));
+    txt.className = ''; txt.textContent = lines.join('\n');
+  } catch (e) { if (my === balSeq) { txt.className = 'err'; txt.textContent = '잔여량을 못 읽었어요: ' + e.message; } }
+}
+// 생성하는 동안에는 한 장마다 가볍게 갱신 (5초 안에는 다시 안 물어봐요)
+function refreshBalanceSoon() { if (Date.now() - balLast > 5000) refreshBalance(); }
 let whereSeq = 0;
 async function showWhere() {
   const my = ++whereSeq, box = $('dirWhere'), v = S.saveDir.trim();
@@ -574,9 +595,11 @@ function initTagDrop() {
 function init() {
   load();
   $('apiKey').value = S.apiKey; keyState();
-  $('apiKey').addEventListener('input', () => { S.apiKey = $('apiKey').value.trim(); save(); keyState(); });
+  $('apiKey').addEventListener('input', () => { S.apiKey = $('apiKey').value.trim(); save(); keyState(); clearTimeout(balTimer); $('balText').textContent = ''; balTimer = setTimeout(refreshBalance, 900); });
+  $('balRefresh').addEventListener('click', refreshBalance);
+  refreshBalance();
   $('keyShow').addEventListener('click', () => { const k = $('apiKey'); k.type = k.type === 'password' ? 'text' : 'password'; $('keyShow').textContent = k.type === 'password' ? '보기' : '숨기기'; });
-  $('keyClear').addEventListener('click', () => { if (!S.apiKey || confirm('저장된 API 키를 지울까요?')) { S.apiKey = ''; $('apiKey').value = ''; save(); keyState(); } });
+  $('keyClear').addEventListener('click', () => { if (!S.apiKey || confirm('저장된 API 키를 지울까요?')) { S.apiKey = ''; $('apiKey').value = ''; save(); keyState(); $('balText').textContent = ''; refreshBalance(); } });
 
   bindValue('artist', 'artist', (v) => v, 'input');
   bindValue('negCommon', 'negCommon', (v) => v, 'input');
