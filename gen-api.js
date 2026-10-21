@@ -96,6 +96,8 @@ function parseBalance(j) {
     fixed, purchased,
     usagePercent: pct, // V5 사용량: 100이 가득, 쓰면 줄어요
     usageNegative: usage && typeof usage.isNegative === 'boolean' ? usage.isNegative : null,
+    // 응답의 usage 안에 있는 다른 숫자 칸(예: 부스트로 충전한 추가분)이 있으면 그대로 넘겨요. 이름을 몰라서 화면에 이름째 보여 줘요
+    usageExtra: usage ? Object.fromEntries(Object.entries(usage).filter(([k, v]) => !['percent', 'isNegative', 'timeUntilNextPercent'].includes(k) && (typeof v === 'number' || typeof v === 'boolean')).slice(0, 8)) : {},
     tier: num(sub.tier), active: typeof sub.active === 'boolean' ? sub.active : null,
   };
 }

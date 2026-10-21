@@ -390,8 +390,10 @@ async function refreshBalance() {
     const f = (n) => n.toLocaleString('ko-KR');
     const lines = [];
     if (r.usagePercent !== null) lines.push(`V5 잔여량  ${r.usagePercent}%${r.usageNegative ? ' (한도 초과)' : ''}`);
+    for (const [k, v] of Object.entries(r.usageExtra || {})) lines.push(`${k}  ${typeof v === 'number' ? f(v) : v}`);
     if (r.anlas !== null) lines.push(`Anlas  ${f(r.anlas)}` + (r.fixed !== null && r.purchased !== null && r.purchased > 0 ? `  (구독 ${f(r.fixed)} + 구매 ${f(r.purchased)})` : ''));
     txt.className = ''; txt.textContent = lines.join('\n');
+    txt.title = r.usagePercent === null ? '' : `V5 사용량은 쓰면 줄고 시간이 지나면 차올라요. 부스트(쿠폰)로 충전하면 100%를 넘을 수 있어요.`;
   } catch (e) { if (my === balSeq) { txt.className = 'err'; txt.textContent = '잔여량을 못 읽었어요: ' + e.message; } }
 }
 // 생성하는 동안에는 한 장마다 가볍게 갱신 (5초 안에는 다시 안 물어봐요)
