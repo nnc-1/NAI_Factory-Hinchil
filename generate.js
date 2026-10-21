@@ -389,8 +389,11 @@ async function refreshBalance() {
     if (!r.ok) { txt.className = 'err'; txt.textContent = r.error || '잔여량을 못 읽었어요'; return; }
     const f = (n) => n.toLocaleString('ko-KR');
     const lines = [];
-    if (r.usagePercent !== null) lines.push(`V5 잔여량  ${r.usagePercent}%${r.usageNegative ? ' (한도 초과)' : ''}`);
-    for (const [k, v] of Object.entries(r.usageExtra || {})) lines.push(`${k}  ${typeof v === 'number' ? f(v) : v}`);
+    // 사이트처럼 "11% 남음 · +15% 추가분" 한 줄로. 추가분 칸 이름(extra/boost/bonus)이 보이면 합쳐 쓰고, 아니면 이름째 따로 보여 줘요
+    const ex = Object.entries(r.usageExtra || {}), isExtra = ([k, v]) => typeof v === 'number' && /extra|boost|bonus/i.test(k);
+    const extra = ex.find(isExtra), rest = ex.filter((e) => e !== extra);
+    if (r.usagePercent !== null) lines.push(`V5 잔여량  ${r.usagePercent}%${extra ? `  +${extra[1]}% 추가분` : ''}${r.usageNegative ? ' (한도 초과)' : ''}`);
+    for (const [k, v] of rest) lines.push(`${k}  ${typeof v === 'number' ? f(v) : v}`);
     if (r.anlas !== null) lines.push(`Anlas  ${f(r.anlas)}` + (r.fixed !== null && r.purchased !== null && r.purchased > 0 ? `  (구독 ${f(r.fixed)} + 구매 ${f(r.purchased)})` : ''));
     txt.className = ''; txt.textContent = lines.join('\n');
     txt.title = r.usagePercent === null ? '' : `V5 사용량은 쓰면 줄고 시간이 지나면 차올라요. 부스트(쿠폰)로 충전하면 100%를 넘을 수 있어요.`;
